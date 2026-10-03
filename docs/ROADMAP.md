@@ -127,5 +127,5 @@ orca worktree create --name m2-skills --no-parent --agent <agent> \
 - [x] M7 后台/定时任务（见 `docs/runs/m7-scheduler.md`）
 - [x] INT-A 工具型机制接入 server（skills/MCP/subagent；见 `docs/runs/int-a.md`）
 - [x] INT-B1 循环型机制（hooks/permissions + compaction；见 `docs/runs/int-b1.md`）
-- [ ] INT-B2 循环型机制（checkpoint + scheduler）
+- [x] INT-B2 循环型机制（checkpoint + scheduler；见 `docs/runs/int-b2.md`）
 - [ ] M8 会话 UX 与 CLI 副产物
