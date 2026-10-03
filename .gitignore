@@ -11,4 +11,5 @@ data/
 # Orca worktrees are created nested inside the repo directory; keep them out
 # of the main worktree's index.
 /m[0-9]*-*/
+/int-*/
 
