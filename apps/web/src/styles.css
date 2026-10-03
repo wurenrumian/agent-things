@@ -237,6 +237,8 @@ button {
   display: flex;
   gap: 6px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .session-list {
@@ -345,6 +347,30 @@ button {
 }
 .role-system {
   color: var(--text-dim);
+}
+
+/* M8 fork affordance on an assistant turn. */
+.btn-fork {
+  margin-left: auto;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-faint);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 10px;
+  font-family: var(--mono);
+  opacity: 0;
+  transition: opacity 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.msg:hover .btn-fork,
+.btn-fork:focus-visible {
+  opacity: 1;
+}
+
+.btn-fork:hover {
+  border-color: var(--accent);
+  color: var(--text);
 }
 
 .msg-meta {

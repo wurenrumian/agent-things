@@ -45,6 +45,26 @@ export function createSession(title?: string): Promise<SessionMeta> {
   });
 }
 
+export interface ForkOptions {
+  atMessageIndex?: number;
+  title?: string;
+}
+
+/** M8: branch a session at (or before) a message index. */
+export function forkSession(
+  id: string,
+  opts: ForkOptions = {},
+): Promise<SessionMeta> {
+  return request<SessionMeta>(
+    `/api/sessions/${encodeURIComponent(id)}/fork`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(opts),
+    },
+  );
+}
+
 export function getSession(id: string): Promise<SessionDetail> {
   return request<SessionDetail>(`/api/sessions/${encodeURIComponent(id)}`);
 }

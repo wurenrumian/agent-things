@@ -24,6 +24,7 @@ All responses JSON unless noted. Errors: `{ "error": string }` with status.
 | GET | `/api/mechanisms` | — | `{ skills: string[], mcpServers: string[], tools: string[] }` |
 | GET | `/api/sessions` | — | `SessionMeta[]` |
 | POST | `/api/sessions` | `{ title?: string }` | `SessionMeta` |
+| POST | `/api/sessions/:id/fork` | `{ atMessageIndex?, title? }` | `SessionMeta` |
 | GET | `/api/sessions/:id` | — | `{ session: SessionMeta, messages: ChatMessage[] }` |
 | GET | `/api/sessions/:id/events` | — | `{ seq: number, event: AgentEvent }[]` |
 | POST | `/api/sessions/:id/compact` | — | `{ before, after, summarized, keptRecent, keptLeading, placement }` |
@@ -34,6 +35,13 @@ All responses JSON unless noted. Errors: `{ "error": string }` with status.
 | POST | `/api/sessions/:id/messages` | `{ input: string }` | `text/event-stream` |
 
 `SessionMeta = { id, title, cwd, createdAt, updatedAt, messageCount }`.
+
+**M8 fork (additive).** `POST /api/sessions/:id/fork` branches a session: the new
+session's messages are the source's `slice(0, atMessageIndex ?? end)` (a copy, not
+a view), the event log starts empty, and the title defaults to
+`${source.title} (fork)` (override with `title`). Returns the new `SessionMeta`,
+or `404 { error }` when the source is unknown; `atMessageIndex` must be a
+non-negative integer. The source session is left untouched.
 
 `POST /api/sessions/:id/compact` (M3, additive) forces one compaction of the
 live agent's history now. `before`/`after` are coarse token estimates, and it
