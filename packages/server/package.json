@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
+    "cache-experiment": "tsx scripts/cache-experiment.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
