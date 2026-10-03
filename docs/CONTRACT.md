@@ -27,6 +27,10 @@ All responses JSON unless noted. Errors: `{ "error": string }` with status.
 | GET | `/api/sessions/:id` | — | `{ session: SessionMeta, messages: ChatMessage[] }` |
 | GET | `/api/sessions/:id/events` | — | `{ seq: number, event: AgentEvent }[]` |
 | POST | `/api/sessions/:id/compact` | — | `{ before, after, summarized, keptRecent, keptLeading, placement }` |
+| GET | `/api/sessions/:id/checkpoints` | — | `{ turns: [{ turnId, files: [{ path, existed, size, hash }] }] }` |
+| POST | `/api/sessions/:id/checkpoints/:turnId/restore` | — | `RestoreReport` |
+| POST | `/api/sessions/:id/schedule` | `{ afterMs?, at?, intervalMs?, prompt }` | `TaskRecord` |
+| GET | `/api/sessions/:id/tasks` | — | `TaskRecord[]` |
 | POST | `/api/sessions/:id/messages` | `{ input: string }` | `text/event-stream` |
 
 `SessionMeta = { id, title, cwd, createdAt, updatedAt, messageCount }`.
@@ -37,6 +41,37 @@ returns `409 { error }` when compaction is not configured
 (`COMPACT_THRESHOLD_TOKENS` unset/`0`). A `mechanism` event
 (`name:"compaction"`, `phase:"compacted"`, `data.via:"api"`) is appended to the
 session log and the live messages are persisted.
+
+**M6 checkpoints (additive).** Before the agent executes `write_file` or
+`edit_file`, the composition root snapshots the target file's current bytes into
+the loop turn (`ToolContext.turnId`). `GET /api/sessions/:id/checkpoints` lists
+those turns (session-scoped; `hash` is the sha256 of the snapshot bytes, `""`
+when the file did not exist). `POST
+/api/sessions/:id/checkpoints/:turnId/restore` restores every file in that turn
+byte-for-byte and returns a `RestoreReport`:
+
+```jsonc
+{ "turnId": "…-t1", "identical": true, "restored": 1, "deleted": 0,
+  "entries": [{ "path": "…", "action": "restore",
+                "beforeHash": "…", "afterHash": "…", "identical": true }] }
+```
+
+`identical` is true iff every restored/absent file's on-disk sha256 equals the
+snapshot. Restoring an unknown turn returns `404 { error }`. Snapshotting only
+happens for those two write tools, so a read-only boot is byte-for-byte
+unchanged.
+
+**M7 scheduler (additive).** `POST /api/sessions/:id/schedule` registers a task;
+exactly one timing field is required: `afterMs` (number ≥ 0), `at` (epoch ms or
+ISO date) or `intervalMs` (number > 0), plus a non-empty `prompt`. The task runs
+a **fresh nested `Agent`**, seeded from the session's persisted messages, and
+the returned `TaskRecord` carries the generated id. Tasks are named with the
+session id, so `GET /api/sessions/:id/tasks` lists that session's tasks. When a
+task settles the server appends the outcome as a `role:"user"` message to the
+session (via `reinjectTaskOutcome`), persists the messages, and appends a
+`task.settled` event. Returns `409 { error }` when `SCHEDULER_ENABLED=false`.
+`TaskRecord = { id, name, kind, state, runs, lastStatus?, result?, error?,
+createdAt, nextRunAt?, intervalMs?, … }`.
 
 ### SSE stream for `POST /messages`
 
@@ -86,6 +121,20 @@ summarized, keptRecent, keptLeading, placement } }` (plus a `hooks`/`preCompact`
 event when hooks are configured). The `preToolUse`/`postToolUse` events follow
 `tool.call`/`tool.result` respectively.
 
+**M7 `task.settled` event (additive).** When a scheduled task settles, the server
+persists one event (it is not part of the `/messages` SSE turn; it appears in the
+event log and the web Timeline):
+
+```jsonc
+{ "type": "task.settled", "taskId": "sched-…-1", "name": "<sessionId>",
+  "kind": "one-shot" | "interval", "status": "succeeded" | "failed" | "cancelled",
+  "result": "READY", "error": "…", "run": 1, "at": 1791034410138 }
+```
+
+`result`/`error` are optional (present on success/failure respectively). The same
+settlement also appends a re-injected `role:"user"` message to the session (see
+`reinjectTaskOutcome`), which is how the model next sees the outcome.
+
 ## Config (server, from env)
 
 Read from repo-root `.env` (do not add a dotenv dependency; write a tiny loader).
@@ -118,6 +167,11 @@ Read from repo-root `.env` (do not add a dotenv dependency; write a tiny loader)
 - `COMPACT_KEEP_LEADING` (messages kept verbatim before the summarized span;
   default `1`).
 - `COMPACT_PLACEMENT` (`spliced` | `leading`; default `spliced`).
+- `CHECKPOINT_DIR` (directory for M6 checkpoint snapshots, mirrored to
+  `checkpoints.json`; default `${DATA_DIR}/checkpoints`). Always opened;
+  snapshotting only occurs for `write_file`/`edit_file`.
+- `SCHEDULER_ENABLED` (`true` | `false`, default `true`). When `false`,
+  `POST …/schedule` returns `409` and `GET …/tasks` is empty.
 
 ## Web app (Vite + React + TS, dev port 5173)
 

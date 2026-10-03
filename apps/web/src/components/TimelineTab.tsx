@@ -30,8 +30,13 @@ function TimelineRow({ event, index }: { event: AgentEvent; index: number }) {
   const decision =
     event.type === "permission.decision" ? event.decision : undefined;
   const decisionClass = decision ? ` tl-decision-${decision}` : "";
+  const settledStatus =
+    event.type === "task.settled" ? event.status : undefined;
+  const statusClass = settledStatus ? ` tl-status-${settledStatus}` : "";
   return (
-    <details className={`tl-row tl-${event.type.replace(".", "-")}${decisionClass}`}>
+    <details
+      className={`tl-row tl-${event.type.replace(".", "-")}${decisionClass}${statusClass}`}
+    >
       <summary className="tl-summary">
         <span className="tl-seq">{String(index).padStart(3, "0")}</span>
         <span className="tl-time">{formatTime(event.at)}</span>
@@ -74,6 +79,15 @@ function summarize(event: AgentEvent): string {
       const detail =
         event.data === undefined ? "" : ` · ${truncate(JSON.stringify(event.data))}`;
       return `${event.name} · ${event.phase}${detail}`;
+    }
+    case "task.settled": {
+      const detail =
+        event.status === "failed" && event.error
+          ? ` — ${event.error}`
+          : event.result === undefined
+            ? ""
+            : ` — ${truncate(JSON.stringify(event.result))}`;
+      return `${event.status} · ${event.name} (${event.kind}, run ${event.run})${detail}`;
     }
     case "turn.end":
       return event.error ? `${event.reason}: ${event.error}` : event.reason;

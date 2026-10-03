@@ -15,6 +15,7 @@ import type { OpenRouterClient } from "../provider/openrouter.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import type { ChatMessage, ToolCall, UserMessage } from "../types.js";
 import type { HookRunner } from "../mechanisms/hooks/runner.js";
+import type { CheckpointStore } from "../mechanisms/checkpoint/index.js";
 
 /**
  * The agent loop — the "L0" kernel.
@@ -103,6 +104,12 @@ export interface AgentConfig {
   hooks?: HookRunner;
   /** M3 automatic compaction. Absent ⇒ history is never folded. */
   compaction?: AgentCompactor;
+  /**
+   * M6 file checkpoints. When set it is handed to every tool call's
+   * `ToolContext.checkpoints`, so a wrapped write tool can snapshot the file
+   * before mutating it. Absent ⇒ no snapshotting (the default).
+   */
+  checkpoints?: CheckpointStore;
 }
 
 export interface AgentSnapshot {
@@ -467,6 +474,9 @@ export class Agent {
       const result = await tool.execute(executedInput, {
         cwd: this.config.cwd,
         signal,
+        turnId,
+        sessionId: this.sessionId,
+        checkpoints: this.config.checkpoints,
       });
       output = result.output;
       isError = result.isError ?? false;

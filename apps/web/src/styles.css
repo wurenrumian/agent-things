@@ -986,6 +986,19 @@ button {
 .tl-mechanism .tl-type {
   color: #56d4dd;
 }
+.tl-task-settled .tl-type {
+  color: #d2a8ff;
+}
+.tl-status-succeeded .tl-brief {
+  color: var(--green);
+}
+.tl-status-failed .tl-brief {
+  color: var(--red);
+  font-weight: 600;
+}
+.tl-status-cancelled .tl-brief {
+  color: var(--amber);
+}
 .tl-usage .tl-type {
   color: var(--green);
 }

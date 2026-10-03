@@ -10,6 +10,7 @@ import {
   type ToolDef,
   type ToolResult,
 } from "@agent/core";
+import path from "node:path";
 import type { ServerConfig } from "./config.js";
 import {
   SkillRegistry,
@@ -31,6 +32,8 @@ import {
   loadHooksFile,
 } from "../../core/src/mechanisms/hooks/index.js";
 import { compactDetailed } from "../../core/src/mechanisms/compaction/index.js";
+import { CheckpointStore } from "../../core/src/mechanisms/checkpoint/index.js";
+import { Scheduler } from "../../core/src/mechanisms/scheduler/index.js";
 
 /**
  * Composition root (the "L8" wiring step).
@@ -58,6 +61,10 @@ export interface ComposedAgent {
   skills: string[];
   /** Names of the MCP servers that connected successfully. */
   mcpServers: string[];
+  /** Per-turn file snapshots (M6). Always opened; inert until a write. */
+  checkpoints: CheckpointStore;
+  /** Background/scheduled task runner (M7), unless `SCHEDULER_ENABLED=false`. */
+  scheduler?: Scheduler;
   /** Close every connected MCP stdio client. Safe to call more than once. */
   close(): void;
 }
@@ -118,6 +125,30 @@ function observable(
     },
   };
 }
+
+/**
+ * M6: wrap a file-mutating tool so its target is snapshotted *before* the
+ * executor runs. The snapshot lands in the current loop turn (`ctx.turnId`), so
+ * `POST /checkpoints/:turnId/restore` can put the exact bytes back. Other tools
+ * are left untouched, and with no `ctx.checkpoints` this is a pass-through.
+ */
+function checkpointed(tool: ToolDef): ToolDef {
+  return {
+    ...tool,
+    async execute(input, ctx) {
+      if (typeof input["path"] === "string") {
+        await ctx.checkpoints?.snapshot(
+          path.resolve(ctx.cwd, input["path"]),
+          ctx.turnId,
+        );
+      }
+      return tool.execute(input, ctx);
+    },
+  };
+}
+
+/** Tool names whose files must be checkpointed before mutation. */
+const CHECKPOINTED_TOOLS = new Set(["write_file", "edit_file"]);
 
 /** Build a `ToolDef` that proxies one MCP tool over the shared stdio client. */
 function mcpToolDef(
@@ -229,8 +260,24 @@ export async function composeAgent(config: ServerConfig): Promise<ComposedAgent>
       : "[server] compaction: none (COMPACT_THRESHOLD_TOKENS unset/0)",
   );
 
+  /* ------------------------------------------------ checkpoints (M6) */
+
+  const checkpoints = await CheckpointStore.open(config.checkpointDir);
+  console.log(`[server] checkpoints: ${config.checkpointDir}`);
+
+  /* ------------------------------------------------ scheduler (M7) */
+
+  const scheduler = config.schedulerEnabled ? new Scheduler() : undefined;
+  console.log(
+    scheduler
+      ? "[server] scheduler: enabled"
+      : "[server] scheduler: disabled (SCHEDULER_ENABLED=false)",
+  );
+
   const tools = new ToolRegistry();
-  for (const tool of builtinTools()) tools.register(tool);
+  for (const tool of builtinTools()) {
+    tools.register(CHECKPOINTED_TOOLS.has(tool.name) ? checkpointed(tool) : tool);
+  }
 
   /* ---------------------------------------------------------------- skills */
 
@@ -338,16 +385,22 @@ export async function composeAgent(config: ServerConfig): Promise<ComposedAgent>
   if (gate) agentConfig.gate = gate;
   if (hooks) agentConfig.hooks = hooks;
   if (compaction) agentConfig.compaction = compaction;
+  agentConfig.checkpoints = checkpoints;
 
   let closed = false;
   return {
     agentConfig,
     skills,
     mcpServers,
+    checkpoints,
+    scheduler,
     close() {
       if (closed) return;
       closed = true;
       for (const mcp of mcpClients) mcp.close();
+      // Stop timers and cancel in-flight scheduled work; fire-and-forget since
+      // the process is on its way out.
+      void scheduler?.shutdown();
     },
   };
 }
