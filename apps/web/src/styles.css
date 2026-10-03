@@ -903,6 +903,67 @@ button {
   font-size: 11px;
 }
 
+/* M8 session cost headline */
+.usage-headline {
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--bg-elev-2), var(--bg-elev));
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.headline-cost {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.headline-cost-value {
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--green);
+  letter-spacing: -0.02em;
+}
+
+.headline-cost-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.headline-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.headline-metric {
+  display: flex;
+  flex-direction: column;
+}
+
+.headline-value {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.headline-metric-accent .headline-value {
+  color: #7ee787;
+}
+
+.headline-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
 /* ---- timeline ---- */
 
 .timeline {

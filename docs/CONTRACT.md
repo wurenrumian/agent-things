@@ -208,10 +208,16 @@ Read from repo-root `.env` (do not add a dotenv dependency; write a tiny loader)
     estimated tokens, sections).
   - **Request** tab: from `request.sent` — the raw JSON request body, collapsible.
   - **Usage** tab: from `usage` — prompt/completion/total tokens, `cached_tokens`,
-    `cache_write_tokens`, cost; accumulate per turn.
+    `cache_write_tokens`, cost; accumulate per turn. The session headline shows
+    total prompt / completion / cached tokens, hit rate, and total cost (M8).
   - **Timeline** tab: every event in order, terminal-style.
+  - **Diff** tab (M8, additive): every `mechanism` `name:"diff"` patch, rendered
+    monospace with `+` green / `-` red / context dim. Only shown once a diff
+    exists.
 - Send box posts to `/api/sessions/:id/messages` and consumes the SSE stream,
   appending events live.
 - Session picker: list sessions, create a new one, load existing events on select.
+  A **Fork** action (M8) branches the selected session; each assistant turn also
+  exposes a per-message fork through that point.
 
 No component library. Hand-written CSS is fine and preferred.
