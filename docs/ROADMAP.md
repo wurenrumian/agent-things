@@ -31,12 +31,16 @@
   **反转 tools 顺序 → cached 0**；追加 1 个工具（+83 token）→ cached 0–512（代价是新增
   字节的 ~34–40 倍）；system 改 1 byte → 丢 84.6%；append-only 恒定 3328。
 
-### M2 — Skills 与渐进披露
+### M2 — Skills 与渐进披露 ✅
 
 - **机制**：三级披露（元数据常驻 / 正文按需 / 引用文件）。
 - **实验**：正文注入的三种方式（改写 system vs 尾部 user 消息 vs tool result），
   对比 `cached_tokens` 曲线。
-- **交付**：skill 加载器 + 实验数据 + 结论（回答"为什么不破坏缓存"）。
+- **交付**：[`docs/mechanisms/skills.md`](mechanisms/skills.md)、
+  [`docs/runs/m2-skills.md`](runs/m2-skills.md)。
+- **实测**：尾部 user 消息 / tool result 注入，`cached` 保持 3456（follow 达 99.5%）；
+  **改写 system 前缀 → `cached` 塌到 640**。修正 MECHANISMS §2：只有"非追加地改动
+  已缓存前缀"才失效，追加到 system 尾部等价于尾部消息。
 
 ### M3 — 上下文压缩与回收
 
@@ -44,17 +48,22 @@
 - **实验**：压缩后第一/二轮缓存恢复曲线；固定位置摘要 vs 拼进历史。
 - **交付**：压缩器 + `/compact` 命令 + 实测文档（对齐 Claude Code 的 PreCompact 设计）。
 
-### M4 — MCP 上下文管理
+### M4 — MCP 上下文管理 ✅
 
-- **机制**：手写 MCP 客户端（stdio + http）、`tools`/`resources`/`prompts` 注入。
-- **实验**：增删一个 server 对缓存与 token 的影响；工具搜索/代码执行式调用的压缩比。
-- **交付**：MCP 客户端 + 对比文档（回答"MCP 的上下文管理机制是什么"）。
+- **机制**：手写 MCP 客户端（stdio JSON-RPC，无 SDK）、`tools/list`/`tools/call`。
+- **交付**：[`docs/mechanisms/mcp.md`](mechanisms/mcp.md)、
+  [`docs/runs/m4-mcp.md`](runs/m4-mcp.md)。（`resources`/`prompts` 注入时机、
+  工具搜索/代码执行式调用列为后续。）
+- **实测**：N 个 MCP 工具约 **165 token/个**（N=20 在 2842 基线上 +3300）；加 1 个
+  工具 `cached` 3328→0，重排同一集合 3456→0，**放大 ~16–20×**。
 
-### M5 — 子 agent 与多 agent
+### M5 — 子 agent 与多 agent ✅
 
-- **机制**：独立上下文的 subagent、结果回灌、并行 fan-out。
-- **实验**：子 agent 回灌 vs 主上下文直做的 token 账。
-- **交付**：subagent 工具 + token 对比文档。
+- **机制**：独立上下文的 subagent、结果回灌。
+- **交付**：[`docs/mechanisms/subagent.md`](mechanisms/subagent.md)、
+  [`docs/runs/m5-subagent.md`](runs/m5-subagent.md)。
+- **实测**：委派把父上下文最终 `prompt_tokens` **9420 → 858（−90.9%）**；总 token
+  +15.5%（10544→12178）、成本 $0.00119→$0.00141。隔离缩小主上下文，代价是总 token 略增。
 
 ### M6 — 权限、hooks、checkpoint
 
@@ -95,3 +104,9 @@ orca worktree create --name m2-skills --no-parent --agent <agent> \
 - [x] core 内核（M0）
 - [x] server + web（M0，Orca 并行完成并合入 master）
 - [x] 一次真实"读→改→跑"验收（见 `docs/runs/m0-smoke.md`）
+- [x] M1 缓存与 token 经济（见 `docs/runs/m1-cache.md`）
+- [x] M2 skills 渐进披露（见 `docs/runs/m2-skills.md`）
+- [x] M4 MCP 上下文（见 `docs/runs/m4-mcp.md`）
+- [x] M5 subagent 上下文隔离（见 `docs/runs/m5-subagent.md`）
+- [ ] M3 压缩、M6 权限/hooks/checkpoint、M7 后台/定时
+- [ ] 把 M2/M4/M5 接入 HTTP server（协调者整合）

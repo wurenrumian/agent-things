@@ -166,5 +166,23 @@ cache creation 的 0.76%"**；压缩后，attachment builders 会**重新宣告�
 
 成本：`mimo-v2.6-flash` 冷调用 `$0.000375`、命中 `$0.000309`（约 **-18%**）。
 
-> 尚未验证：skill 正文的注入方式（M2）、压缩后的缓存恢复曲线（M3）、
-> MCP server 增删的真实代价（M4）、subagent 回灌的 token 账（M5）。
+> 尚未验证：压缩后的缓存恢复曲线（M3）、skill/MCP/subagent 接入 HTTP server 后的
+> 端到端行为（整合）、M6/M7。
+
+### M2 Skills 渐进披露 — 详见 [`runs/m2-skills.md`](runs/m2-skills.md)
+
+正文用**尾部 user 消息 / tool result** 注入：`cached` 保持 3456，follow 调用达 99.5%；
+**改写 system 前缀**：`cached` 塌到 640。修正 §2 的措辞：不是"改 system 就失效"，
+而是"**非追加地改动已缓存前缀**才失效"——把内容**追加到 system 尾部**等价于尾部消息，
+并不破坏缓存。
+
+### M4 MCP 上下文 — 详见 [`runs/m4-mcp.md`](runs/m4-mcp.md)
+
+手写 stdio JSON-RPC 客户端跑通 `initialize`/`tools/list`/`tools/call`。N 个急切注入的
+工具约 **165 token/个**（N=20 在 2842 基线上 +3300）；**加 1 个工具 `cached` 3328→0**，
+重排同一集合 3456→0，**放大 ~16–20×**。
+
+### M5 Subagent — 详见 [`runs/m5-subagent.md`](runs/m5-subagent.md)
+
+委派把父上下文最终 `prompt_tokens` **9420 → 858（−90.9%）**；总 token +15.5%、
+成本 +18.8%。隔离用"总 token 略增"换取"主上下文大幅缩小"。
