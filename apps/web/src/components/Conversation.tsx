@@ -6,12 +6,15 @@ interface ConversationProps {
   messages: ChatMessage[];
   streaming: string;
   toolNames: Record<string, string>;
+  /** M8: fork the session through this message index (inclusive). */
+  onFork?: (atMessageIndex: number) => void;
 }
 
 export function Conversation({
   messages,
   streaming,
   toolNames,
+  onFork,
 }: ConversationProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -34,6 +37,8 @@ export function Conversation({
           key={index}
           message={message}
           toolNames={toolNames}
+          onFork={onFork}
+          index={index}
         />
       ))}
       {streaming !== "" && (
@@ -53,15 +58,29 @@ export function Conversation({
 function MessageBubble({
   message,
   toolNames,
+  onFork,
+  index,
 }: {
   message: ChatMessage;
   toolNames: Record<string, string>;
+  onFork?: (atMessageIndex: number) => void;
+  index: number;
 }) {
   if (message.role === "assistant") {
     return (
       <div className="msg msg-assistant">
         <div className="msg-head">
           <span className="role role-assistant">assistant</span>
+          {onFork && (
+            <button
+              type="button"
+              className="btn-fork"
+              onClick={() => onFork(index + 1)}
+              title="Fork the session through this message"
+            >
+              ⑂ fork here
+            </button>
+          )}
         </div>
         {message.content ? (
           <pre className="msg-body">{message.content}</pre>

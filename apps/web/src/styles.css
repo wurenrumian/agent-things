@@ -237,6 +237,8 @@ button {
   display: flex;
   gap: 6px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .session-list {
@@ -345,6 +347,30 @@ button {
 }
 .role-system {
   color: var(--text-dim);
+}
+
+/* M8 fork affordance on an assistant turn. */
+.btn-fork {
+  margin-left: auto;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-faint);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 10px;
+  font-family: var(--mono);
+  opacity: 0;
+  transition: opacity 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.msg:hover .btn-fork,
+.btn-fork:focus-visible {
+  opacity: 1;
+}
+
+.btn-fork:hover {
+  border-color: var(--accent);
+  color: var(--text);
 }
 
 .msg-meta {
@@ -877,6 +903,67 @@ button {
   font-size: 11px;
 }
 
+/* M8 session cost headline */
+.usage-headline {
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--bg-elev-2), var(--bg-elev));
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.headline-cost {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.headline-cost-value {
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--green);
+  letter-spacing: -0.02em;
+}
+
+.headline-cost-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.headline-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.headline-metric {
+  display: flex;
+  flex-direction: column;
+}
+
+.headline-value {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.headline-metric-accent .headline-value {
+  color: #7ee787;
+}
+
+.headline-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
 /* ---- timeline ---- */
 
 .timeline {
@@ -1003,5 +1090,85 @@ button {
   color: var(--green);
 }
 .tl-turn-end .tl-type {
+  color: var(--text-dim);
+}
+
+/* ---- M8 diff view ---- */
+
+.diff-card {
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  overflow: hidden;
+}
+
+.diff-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg-elev-2);
+}
+
+.diff-path {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-stats {
+  display: flex;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.diff-added {
+  color: var(--green);
+}
+
+.diff-removed {
+  color: var(--red);
+}
+
+.diff-body {
+  margin: 0;
+  padding: 8px 0;
+  background: #0a0e14;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+.diff-line {
+  display: block;
+  white-space: pre;
+  padding: 0 10px;
+}
+
+.diff-hunk {
+  color: #79c0ff;
+  background: rgba(56, 139, 253, 0.08);
+}
+
+.diff-add {
+  color: #7ee787;
+  background: rgba(63, 185, 80, 0.1);
+}
+
+.diff-del {
+  color: #ffa198;
+  background: rgba(248, 81, 73, 0.1);
+}
+
+.diff-ctx {
   color: var(--text-dim);
 }

@@ -170,4 +170,40 @@ export class Store {
       .prepare(`UPDATE sessions SET title = ? WHERE id = ?`)
       .run(title, sessionId);
   }
+
+  /**
+   * M8: branch a session. The fork copies the source's message prefix
+   * `slice(0, atMessageIndex ?? end)` into a brand-new session (fresh id, fresh
+   * event log) so continuing it does not disturb the source's history. The
+   * default title is `${source.title} (fork)`; pass `title` to override.
+   *
+   * A copy is deliberate: both branches then grow independently, which is the
+   * whole point of a fork. Throws when the source id is unknown.
+   */
+  forkSession(
+    sourceId: string,
+    opts: { atMessageIndex?: number; title?: string } = {},
+  ): SessionMeta {
+    const source = this.getSession(sourceId);
+    if (!source) throw new Error(`session not found: ${sourceId}`);
+
+    const messages = this.getMessages(sourceId);
+    const requested = opts.atMessageIndex ?? messages.length;
+    const at = Math.max(0, Math.min(requested, messages.length));
+    const prefix = messages.slice(0, at);
+
+    const title =
+      opts.title && opts.title.trim().length > 0
+        ? opts.title.trim()
+        : `${source.title} (fork)`;
+
+    const meta = this.createSession({
+      id: crypto.randomUUID(),
+      title,
+      cwd: source.cwd,
+    });
+    // A fresh event log: the source's `events` are intentionally not copied.
+    if (prefix.length > 0) this.saveMessages(meta.id, prefix);
+    return { ...meta, messageCount: prefix.length };
+  }
 }

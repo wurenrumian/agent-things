@@ -160,6 +160,44 @@ function buildApp(rt: Runtime): Hono {
     return c.json(session);
   });
 
+  /**
+   * M8: fork a session. Body `{ atMessageIndex?, title? }`; returns the new
+   * `SessionMeta` (404 when the source is unknown). The copied prefix is the
+   * source's first `atMessageIndex` messages (default: all).
+   */
+  app.post("/api/sessions/:id/fork", async (c) => {
+    const id = c.req.param("id");
+    if (!rt.store.getSession(id)) {
+      return c.json({ error: "session not found" }, 404);
+    }
+
+    const body = await readJson(c);
+    const rawIndex = body?.["atMessageIndex"];
+    let atMessageIndex: number | undefined;
+    if (rawIndex !== undefined && rawIndex !== null) {
+      if (
+        typeof rawIndex !== "number" ||
+        !Number.isInteger(rawIndex) ||
+        rawIndex < 0
+      ) {
+        return c.json(
+          { error: "atMessageIndex must be a non-negative integer" },
+          400,
+        );
+      }
+      atMessageIndex = rawIndex;
+    }
+
+    const rawTitle = body?.["title"];
+    const title =
+      typeof rawTitle === "string" && rawTitle.trim().length > 0
+        ? rawTitle.trim()
+        : undefined;
+
+    const forked = rt.store.forkSession(id, { atMessageIndex, title });
+    return c.json(forked);
+  });
+
   app.get("/api/sessions/:id", (c) => {
     const id = c.req.param("id");
     const session = rt.store.getSession(id);

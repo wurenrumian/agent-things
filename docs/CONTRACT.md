@@ -24,6 +24,7 @@ All responses JSON unless noted. Errors: `{ "error": string }` with status.
 | GET | `/api/mechanisms` | — | `{ skills: string[], mcpServers: string[], tools: string[] }` |
 | GET | `/api/sessions` | — | `SessionMeta[]` |
 | POST | `/api/sessions` | `{ title?: string }` | `SessionMeta` |
+| POST | `/api/sessions/:id/fork` | `{ atMessageIndex?, title? }` | `SessionMeta` |
 | GET | `/api/sessions/:id` | — | `{ session: SessionMeta, messages: ChatMessage[] }` |
 | GET | `/api/sessions/:id/events` | — | `{ seq: number, event: AgentEvent }[]` |
 | POST | `/api/sessions/:id/compact` | — | `{ before, after, summarized, keptRecent, keptLeading, placement }` |
@@ -34,6 +35,13 @@ All responses JSON unless noted. Errors: `{ "error": string }` with status.
 | POST | `/api/sessions/:id/messages` | `{ input: string }` | `text/event-stream` |
 
 `SessionMeta = { id, title, cwd, createdAt, updatedAt, messageCount }`.
+
+**M8 fork (additive).** `POST /api/sessions/:id/fork` branches a session: the new
+session's messages are the source's `slice(0, atMessageIndex ?? end)` (a copy, not
+a view), the event log starts empty, and the title defaults to
+`${source.title} (fork)` (override with `title`). Returns the new `SessionMeta`,
+or `404 { error }` when the source is unknown; `atMessageIndex` must be a
+non-negative integer. The source session is left untouched.
 
 `POST /api/sessions/:id/compact` (M3, additive) forces one compaction of the
 live agent's history now. `before`/`after` are coarse token estimates, and it
@@ -97,6 +105,23 @@ event, but never enter the model's context. Shape:
 `name` identifies the mechanism (`skills`, `subagent`, `mcp:<server>`); `phase`
 is mechanism-defined (`loaded`, `completed`, `called`, `error`, …); `data` is
 optional, mechanism-specific detail. The web Timeline renders them.
+
+**M8 file diff (additive).** The composition root wraps `write_file`/`edit_file`:
+it reads the target (relative to `ctx.cwd`; missing = `""`) **before** and
+**after** the call and, when the bytes changed, appends one `mechanism` event to
+that tool's `ToolResult.events`:
+
+```jsonc
+{ "type": "mechanism", "name": "diff", "phase": "file",
+  "data": { "path": "src/a.ts", "added": 2, "removed": 1, "patch": "@@ -1,3 +1,4 @@…" },
+  "at": 1791032649972 }
+```
+
+`patch` is a hunks-only unified diff from the pure `unifiedDiff()` in
+`@agent/core` (no new dependency). It is observability only and never enters the
+model's context; nothing is emitted when the file is unchanged (or on a failed
+call). The web renders these in a **Diff** tab that appears once at least one
+diff exists.
 
 **M6 hooks/permissions events (additive).** When the loop runs a lifecycle hook
 it emits one `mechanism` event with `name:"hooks"` and `phase` equal to the hook
@@ -183,10 +208,16 @@ Read from repo-root `.env` (do not add a dotenv dependency; write a tiny loader)
     estimated tokens, sections).
   - **Request** tab: from `request.sent` — the raw JSON request body, collapsible.
   - **Usage** tab: from `usage` — prompt/completion/total tokens, `cached_tokens`,
-    `cache_write_tokens`, cost; accumulate per turn.
+    `cache_write_tokens`, cost; accumulate per turn. The session headline shows
+    total prompt / completion / cached tokens, hit rate, and total cost (M8).
   - **Timeline** tab: every event in order, terminal-style.
+  - **Diff** tab (M8, additive): every `mechanism` `name:"diff"` patch, rendered
+    monospace with `+` green / `-` red / context dim. Only shown once a diff
+    exists.
 - Send box posts to `/api/sessions/:id/messages` and consumes the SSE stream,
   appending events live.
 - Session picker: list sessions, create a new one, load existing events on select.
+  A **Fork** action (M8) branches the selected session; each assistant turn also
+  exposes a per-message fork through that point.
 
 No component library. Hand-written CSS is fine and preferred.

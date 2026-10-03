@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createSession,
+  forkSession,
   getEvents,
   getMechanisms,
   getSession,
@@ -78,6 +79,24 @@ export default function App() {
       setError(toMessage(err));
     }
   }, [refreshSessions, selectSession]);
+
+  /**
+   * M8: fork the selected session (all messages by default, or a prefix when
+   * `atMessageIndex` is given), refresh the picker, and select the branch.
+   */
+  const handleFork = useCallback(
+    async (atMessageIndex?: number) => {
+      if (!selectedId) return;
+      try {
+        const forked = await forkSession(selectedId, { atMessageIndex });
+        await refreshSessions();
+        await selectSession(forked.id);
+      } catch (err) {
+        setError(toMessage(err));
+      }
+    },
+    [refreshSessions, selectSession, selectedId],
+  );
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -161,6 +180,7 @@ export default function App() {
           onSelect={(id) => void selectSession(id)}
           onNew={() => void handleNew()}
           onRefresh={() => void refreshSessions()}
+          onFork={() => void handleFork()}
         />
 
         <main className="conversation-pane">
@@ -168,6 +188,7 @@ export default function App() {
             messages={messages}
             streaming={streaming}
             toolNames={toolNames}
+            onFork={(atMessageIndex) => void handleFork(atMessageIndex)}
           />
           <form
             className="send-box"

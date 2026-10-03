@@ -8,6 +8,8 @@ interface SessionPickerProps {
   onSelect: (id: string) => void;
   onNew: () => void;
   onRefresh: () => void;
+  /** M8: fork the selected session at its latest message. */
+  onFork: () => void;
 }
 
 export function SessionPicker({
@@ -17,6 +19,7 @@ export function SessionPicker({
   onSelect,
   onNew,
   onRefresh,
+  onFork,
 }: SessionPickerProps) {
   return (
     <aside className="session-picker">
@@ -31,6 +34,15 @@ export function SessionPicker({
             title="Refresh session list"
           >
             ↻
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={onFork}
+            disabled={!selectedId}
+            title="Fork the selected session from its latest message"
+          >
+            ⑂ Fork
           </button>
           <button type="button" className="btn btn-primary" onClick={onNew}>
             + New

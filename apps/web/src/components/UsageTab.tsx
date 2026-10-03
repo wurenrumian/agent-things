@@ -70,12 +70,12 @@ export function UsageTab({ events }: UsageTabProps) {
 
   return (
     <div className="tab-body">
+      <CostHeadline totals={sessionTotals} />
       <TotalsCard
         title="This turn"
         totals={turnTotals}
         highlightCache
       />
-      <TotalsCard title="Session running" totals={sessionTotals} />
 
       <section className="panel-section">
         <h3 className="panel-title">Calls ({all.length})</h3>
@@ -120,6 +120,57 @@ export function UsageTab({ events }: UsageTabProps) {
           </tfoot>
         </table>
       </section>
+    </div>
+  );
+}
+
+/**
+ * M8: the single session headline the brief calls for — total prompt /
+ * completion / cached tokens, cache hit rate, and total spend in one strip.
+ * It replaces the old "Session running" totals card rather than duplicating it.
+ */
+function CostHeadline({ totals }: { totals: UsageTotals }) {
+  const rate = totalsCacheHitRate(totals);
+  return (
+    <section className="usage-headline" aria-label="Session cost summary">
+      <div className="headline-cost">
+        <span className="headline-cost-value">{formatCost(totals.cost)}</span>
+        <span className="headline-cost-label">
+          session cost · {totals.calls} call{totals.calls === 1 ? "" : "s"}
+        </span>
+      </div>
+      <div className="headline-metrics">
+        <HeadlineMetric label="prompt" value={formatNumber(totals.prompt)} />
+        <HeadlineMetric
+          label="completion"
+          value={formatNumber(totals.completion)}
+        />
+        <HeadlineMetric label="cached" value={formatNumber(totals.cached)} accent />
+        <HeadlineMetric label="hit rate" value={formatPercent(rate)} accent />
+      </div>
+      <div
+        className="bar bar-cache"
+        title={`${formatPercent(rate)} of prompt tokens served from cache`}
+      >
+        <div className="bar-fill" style={{ width: `${rate * 100}%` }} />
+      </div>
+    </section>
+  );
+}
+
+function HeadlineMetric({
+  label,
+  value,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className={`headline-metric${accent ? " headline-metric-accent" : ""}`}>
+      <span className="headline-value">{value}</span>
+      <span className="headline-label">{label}</span>
     </div>
   );
 }
