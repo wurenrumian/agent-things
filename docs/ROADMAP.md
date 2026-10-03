@@ -90,4 +90,4 @@ orca worktree create --name m2-skills --no-parent --agent <agent> \
 - [x] 机制地图 `docs/MECHANISMS.md`
 - [x] core 内核（M0）
 - [x] server + web（M0，Orca 并行完成并合入 master）
-- [ ] 一次真实"读→改→跑"验收（需要 `OPENROUTER_API_KEY`）
+- [x] 一次真实"读→改→跑"验收（见 `docs/runs/m0-smoke.md`）

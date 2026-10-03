@@ -22,13 +22,14 @@ export function withCacheBreakpoint(content: Content): ContentPart[] {
 }
 
 /** Flatten a message's content to plain text (for display + token estimates). */
-export function contentToText(content: Content): string {
+export function contentToText(content: Content | null | undefined): string {
+  if (content == null) return "";
   if (typeof content === "string") return content;
   return content.map((p) => (p.type === "text" ? p.text : "")).join("");
 }
 
 export function messageText(m: ChatMessage): string {
-  return contentToText(m.content as Content);
+  return contentToText(m.content as Content | null);
 }
 
 /**
