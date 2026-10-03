@@ -3,7 +3,7 @@ import { ContextTab } from "./ContextTab";
 import { RequestTab } from "./RequestTab";
 import { UsageTab } from "./UsageTab";
 import { TimelineTab } from "./TimelineTab";
-import type { AgentEvent } from "../types";
+import type { AgentEvent, Mechanisms } from "../types";
 
 type TabId = "context" | "request" | "usage" | "timeline";
 
@@ -16,10 +16,11 @@ const TABS: { id: TabId; label: string }[] = [
 
 interface ObservatoryProps {
   events: AgentEvent[];
+  mechanisms: Mechanisms | null;
 }
 
 /** The right pane: everything the event stream tells us about one turn. */
-export function Observatory({ events }: ObservatoryProps) {
+export function Observatory({ events, mechanisms }: ObservatoryProps) {
   const [tab, setTab] = useState<TabId>("context");
 
   const contextEvent = useMemo(
@@ -31,6 +32,7 @@ export function Observatory({ events }: ObservatoryProps) {
 
   return (
     <section className="observatory">
+      <MechanismStrip mechanisms={mechanisms} />
       <nav className="tabs" role="tablist" aria-label="Context observatory">
         {TABS.map(({ id, label }) => (
           <button
@@ -73,4 +75,33 @@ function lastOfType<T extends AgentEvent["type"]>(
     }
   }
   return undefined;
+}
+
+/** Compact summary of what the server composed at boot (`/api/mechanisms`). */
+function MechanismStrip({ mechanisms }: { mechanisms: Mechanisms | null }) {
+  if (!mechanisms) return null;
+  return (
+    <div className="mechanism-strip" title="Loaded from GET /api/mechanisms">
+      <span className="mechanism-item">
+        <span className="mechanism-label">skills</span>
+        <span className="mechanism-value">
+          {joinList(mechanisms.skills)}
+        </span>
+      </span>
+      <span className="mechanism-item">
+        <span className="mechanism-label">mcp</span>
+        <span className="mechanism-value">
+          {joinList(mechanisms.mcpServers)}
+        </span>
+      </span>
+      <span className="mechanism-item">
+        <span className="mechanism-label">tools</span>
+        <span className="mechanism-value">{mechanisms.tools.length}</span>
+      </span>
+    </div>
+  );
+}
+
+function joinList(items: string[]): string {
+  return items.length > 0 ? items.join(", ") : "—";
 }

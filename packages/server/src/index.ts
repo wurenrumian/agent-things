@@ -4,14 +4,12 @@ import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import {
   Agent,
-  OpenRouterClient,
   Store,
-  ToolRegistry,
-  builtinTools,
   type AgentConfig,
   type SessionMeta,
 } from "@agent/core";
 import { loadConfig, type ServerConfig } from "./config.js";
+import { composeAgent } from "./compose.js";
 
 /**
  * HTTP + SSE shell around the `@agent/core` kernel (the "L8" layer).
@@ -29,31 +27,24 @@ interface Runtime {
   store: Store;
   agents: Map<string, Agent>;
   agentConfig: AgentConfig;
+  /** Mechanism inventory for `GET /api/mechanisms`. */
+  skills: string[];
+  mcpServers: string[];
+  /** Tear down long-lived mechanism resources (MCP stdio children). */
+  close: () => void;
 }
 
-function createRuntime(config: ServerConfig): Runtime {
-  const client = new OpenRouterClient({
-    apiKey: config.apiKey,
-    referer: config.referer,
-    title: config.title,
-  });
-
-  const tools = new ToolRegistry();
-  for (const tool of builtinTools()) tools.register(tool);
-
-  const agentConfig: AgentConfig = {
-    client,
-    model: config.model,
-    tools,
-    cwd: config.cwd,
-    permissionMode: config.permissionMode,
-  };
+async function createRuntime(config: ServerConfig): Promise<Runtime> {
+  const composed = await composeAgent(config);
 
   return {
     config,
     store: new Store(config.dbFile),
     agents: new Map<string, Agent>(),
-    agentConfig,
+    agentConfig: composed.agentConfig,
+    skills: composed.skills,
+    mcpServers: composed.mcpServers,
+    close: composed.close,
   };
 }
 
@@ -97,6 +88,14 @@ function buildApp(rt: Runtime): Hono {
       model: rt.config.model,
       cwd: rt.config.cwd,
       permissionMode: rt.config.permissionMode,
+      tools: rt.agentConfig.tools.list().map((t) => t.name),
+    }),
+  );
+
+  app.get("/api/mechanisms", (c) =>
+    c.json({
+      skills: rt.skills,
+      mcpServers: rt.mcpServers,
       tools: rt.agentConfig.tools.list().map((t) => t.name),
     }),
   );
@@ -180,19 +179,26 @@ function buildApp(rt: Runtime): Hono {
   return app;
 }
 
-function start(config: ServerConfig): void {
-  const rt = createRuntime(config);
+async function start(config: ServerConfig): Promise<void> {
+  const rt = await createRuntime(config);
   const app = buildApp(rt);
 
-  serve({ fetch: app.fetch, port: config.port }, (info) => {
+  const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
     console.log(
       `[server] listening on http://localhost:${info.port} ` +
         `(model: ${config.model}, cwd: ${config.cwd}, db: ${config.dbFile})`,
     );
   });
+
+  const shutdown = (): void => {
+    rt.close();
+    server.close(() => process.exit(0));
+  };
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
 }
 
-function main(): void {
+async function main(): Promise<void> {
   let config: ServerConfig;
   try {
     config = loadConfig();
@@ -202,7 +208,12 @@ function main(): void {
     );
     process.exit(1);
   }
-  start(config);
+  await start(config);
 }
 
-main();
+main().catch((err) => {
+  console.error(
+    `[server] fatal: ${err instanceof Error ? err.message : String(err)}`,
+  );
+  process.exit(1);
+});

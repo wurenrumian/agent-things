@@ -155,9 +155,23 @@ export type AgentEvent =
       at: number;
     }
   | { type: "usage"; usage: Usage; at: number }
+  | {
+      type: "mechanism";
+      name: string;
+      phase: string;
+      data?: unknown;
+      at: number;
+    }
   | { type: "turn.end"; reason: TurnEndReason; error?: string; at: number };
 
 export type AgentEventType = AgentEvent["type"];
+
+/** `GET /api/mechanisms` — what the composition root actually wired up. */
+export interface Mechanisms {
+  skills: string[];
+  mcpServers: string[];
+  tools: string[];
+}
 
 export type ContextEvent = Extract<AgentEvent, { type: "context.compiled" }>;
 export type RequestEvent = Extract<AgentEvent, { type: "request.sent" }>;

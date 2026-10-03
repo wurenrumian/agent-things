@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createSession,
   getEvents,
+  getMechanisms,
   getSession,
   listSessions,
   sendMessage,
@@ -9,13 +10,14 @@ import {
 import { Conversation, buildToolNames } from "./components/Conversation";
 import { Observatory } from "./components/Observatory";
 import { SessionPicker } from "./components/SessionPicker";
-import type { AgentEvent, ChatMessage, SessionMeta } from "./types";
+import type { AgentEvent, ChatMessage, Mechanisms, SessionMeta } from "./types";
 
 export default function App() {
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [events, setEvents] = useState<AgentEvent[]>([]);
+  const [mechanisms, setMechanisms] = useState<Mechanisms | null>(null);
   const [streaming, setStreaming] = useState("");
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -56,6 +58,11 @@ export default function App() {
 
   useEffect(() => {
     void (async () => {
+      try {
+        setMechanisms(await getMechanisms());
+      } catch {
+        // The strip is optional; a missing endpoint must not block the app.
+      }
       const list = await refreshSessions();
       const first = list[0];
       if (first) void selectSession(first.id);
@@ -205,7 +212,7 @@ export default function App() {
           </form>
         </main>
 
-        <Observatory events={events} />
+        <Observatory events={events} mechanisms={mechanisms} />
       </div>
     </div>
   );

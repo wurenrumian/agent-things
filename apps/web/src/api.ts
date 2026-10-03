@@ -1,5 +1,6 @@
 import type {
   AgentEvent,
+  Mechanisms,
   SessionDetail,
   SessionMeta,
   StoredEvent,
@@ -26,6 +27,10 @@ async function errorMessage(res: Response): Promise<string> {
     // fall through to the status line
   }
   return `${res.status} ${res.statusText}`;
+}
+
+export function getMechanisms(): Promise<Mechanisms> {
+  return request<Mechanisms>("/api/mechanisms");
 }
 
 export function listSessions(): Promise<SessionMeta[]> {
