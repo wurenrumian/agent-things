@@ -27,7 +27,12 @@ interface DiffLine {
 }
 
 function splitLines(text: string): string[] {
-  return text.length === 0 ? [] : text.split("\n");
+  if (text.length === 0) return [];
+  const lines = text.split("\n");
+  // A trailing newline terminates the last line; it does not add a phantom
+  // empty line (matching how editors and `git diff` count lines).
+  if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
+  return lines;
 }
 
 /**
