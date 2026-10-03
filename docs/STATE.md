@@ -61,10 +61,15 @@ pnpm monorepo（`packages/core` 内核 + `packages/server` HTTP/SSE + `apps/web`
 
 ## 6. 待办
 
-1. **INT-B**（未开始）：把**循环型**机制接进 `agent/loop.ts` —— compaction、hooks+permissions
-   （替换现有 `permissions.ts` 的裁决）、checkpoint、scheduler。需写 `docs/briefs/int-b-*.md` 并派监督式 worker。
-2. **M8**：session fork / diff 可视化 / cost 面板 / 从内核导出 CLI。
-3. 清理：`m0-server/`、`m0-web/`、`m1-cache/`、`m2-skills/`、`m4-mcp/`、`m5-subagent/`
+1. **INT-B1（进行中）**：`loop.ts` 接 hooks/permissions + compaction。
+   `run_373ea5fc9e7a` / task `task_e89d2a8b8d24` / dispatch `ctx_ca0627a9f812` /
+   terminal `term_847c4da4-ac75-41b5-9980-187526323b9a` / worktree `int-b1-loop` /
+   brief `docs/briefs/int-b1-loop.md`。
+   等待：`orca orchestration check --run run_373ea5fc9e7a --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json`。
+2. **INT-B2（未开始）**：checkpoint + scheduler 接入（ToolContext 加 `turnId`/`checkpoints`、
+   写入前快照、恢复路由、`task.settled` 事件 + 结果回灌）。需写 `docs/briefs/int-b2-*.md` 再派 worker。
+3. **M8**：session fork / diff 可视化 / cost 面板 / 从内核导出 CLI。
+4. 清理：`m0-server/`、`m0-web/`、`m1-cache/`、`m2-skills/`、`m4-mcp/`、`m5-subagent/`
    是**无分支空壳目录**（被句柄锁着删不掉，已被 `.gitignore` 的 `/m[0-9]*-*/` 忽略），无害。
 
 ## 7. Orca 编排速查（本项目实际用法）
