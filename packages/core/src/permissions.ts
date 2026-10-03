@@ -1,5 +1,5 @@
-import type { PermissionDecision } from "../events.js";
-import type { ToolDef } from "../tools/registry.js";
+import type { PermissionDecision } from "./events.js";
+import type { ToolDef } from "./tools/registry.js";
 
 /**
  * Permission layer (the "L7" seam). M0 is intentionally non-interactive: the
