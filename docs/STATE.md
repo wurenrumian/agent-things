@@ -25,7 +25,7 @@ pnpm monorepo（`packages/core` 内核 + `packages/server` HTTP/SSE + `apps/web`
 ## 3. Git 状态
 
 - 主 worktree：`D:/Project/agent-things`，分支唯一为 **`master`**。
-- 所有历史 worker 分支已删除；当前只有 **`master`**，已并入 INT-A（merge `7fdeea1`）。
+- 所有历史 worker 分支已删除；当前只有 **`master`**，已并入 INT-A（`7fdeea1`）与 INT-B1（`c80bff3`）。
 - 模型：`xiaomi/mimo-v2.6-flash`；`.env` 在仓库根，**gitignored**，含 `OPENROUTER_API_KEY`。
 - TypeScript **7.0.2**（native），四份 manifest 均 `^7.0.2`；`pnpm typecheck` 全绿。
 - 后台还跑着 `pnpm dev`（server :8787 / web :5173）——shell id `sh_101a314e2001DHKUbQx0gQmZDv`。
@@ -46,30 +46,31 @@ pnpm monorepo（`packages/core` 内核 + `packages/server` HTTP/SSE + `apps/web`
 六个机制模块都在 `packages/core/src/mechanisms/`：`skills`、`mcp`、`subagent`、
 `compaction`、`hooks`、`checkpoint`、`scheduler`。
 
-## 5. ✅ 最近完成：INT-A（工具型机制接入 server）
+## 5. ✅ 已完成：INT-A / INT-B1（整合阶段）
 
-已合并入 master（merge `7fdeea1`，worker 提交 `5a6f49c`），并在 master **复验通过**：
+**INT-A（工具型机制）** — merge `7fdeea1`（worker `5a6f49c`），已复验：
+- additive `mechanism` 事件 + 可选 `ToolResult.events`（`loop` 在 `tool.result` 后 yield）。
+- `compose.ts`：builtin + `use_skill` + MCP stdio + `task`；`GET /api/mechanisms`；
+  env `SKILLS_DIR` / `MCP_SERVERS` / `SUBAGENT_MAX_STEPS`。证据 `docs/runs/int-a.md`。
 
-- 新增 additive `mechanism` 事件 + 可选 `ToolResult.events`（`loop` 在 `tool.result` 后 yield）。
-- `packages/server/src/compose.ts`：builtin + `use_skill` + MCP stdio + `task`；
-  `GET /api/mechanisms`；env `SKILLS_DIR` / `MCP_SERVERS` / `SUBAGENT_MAX_STEPS`。
-- 复验（lib fixtures 启动）：`/api/config` 含 `use_skill`+`task`；
-  `/api/mechanisms` → skills `[code-review, release-notes]`、mcpServers `[echo]`；
-  空配置下 smoke 行为不变。证据见 `docs/runs/int-a.md`。
+**INT-B1（hooks/permissions + compaction）** — merge `c80bff3`（worker `fa665f9`），已复验：
+- `events.ts` `PermissionDecision` 增 `"ask"`；`AgentConfig` 增 optional
+  `gate` / `hooks` / `compaction?`；`executeToolCall` 发真 verdict、用改写后的 input 执行、
+  观察式 `postToolUse`；每步顶部按阈值自动压缩并发 `mechanism` 事件。
+- server：env `HOOKS_FILE` / `POLICY_FILE` / `COMPACT_THRESHOLD_TOKENS` /
+  `COMPACT_KEEP_RECENT` / `COMPACT_KEEP_LEADING` / `COMPACT_PLACEMENT`；
+  新增 `POST /api/sessions/:id/compact`（未配置 409）。
+- 复验（master，无配置）：`/compact` → 409，启动日志 hooks/policy/compaction 全 none。
+  证据 `docs/runs/int-b1.md`（deny/ask/mutate 决策、压缩 21557→10921）。
 
-自称后台 `pnpm dev` 仍在跑；启动验证时请用别的 `PORT` 避免与 :8787 冲突。
+> 两个整合都保证 **未配置 ⇒ 行为不变**。后台 `pnpm dev` 仍在跑；验证时用别的 `PORT`。
 
 ## 6. 待办
 
-1. **INT-B1（进行中）**：`loop.ts` 接 hooks/permissions + compaction。
-   `run_373ea5fc9e7a` / task `task_e89d2a8b8d24` / dispatch `ctx_ca0627a9f812` /
-   terminal `term_847c4da4-ac75-41b5-9980-187526323b9a` / worktree `int-b1-loop` /
-   brief `docs/briefs/int-b1-loop.md`。
-   等待：`orca orchestration check --run run_373ea5fc9e7a --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json`。
-2. **INT-B2（未开始）**：checkpoint + scheduler 接入（ToolContext 加 `turnId`/`checkpoints`、
-   写入前快照、恢复路由、`task.settled` 事件 + 结果回灌）。需写 `docs/briefs/int-b2-*.md` 再派 worker。
-3. **M8**：session fork / diff 可视化 / cost 面板 / 从内核导出 CLI。
-4. 清理：`m0-server/`、`m0-web/`、`m1-cache/`、`m2-skills/`、`m4-mcp/`、`m5-subagent/`
+1. **INT-B2（下一步）**：checkpoint + scheduler 接入 —— `ToolContext` 加 `turnId` / `checkpoints`、
+   写入前快照、恢复路由、`task.settled` 事件 + 结果回灌。需先写 `docs/briefs/int-b2-*.md` 再派 worker。
+2. **M8**：session fork / diff 可视化 / cost 面板 / 从内核导出 CLI。
+3. 清理：`m0-server/`、`m0-web/`、`m1-cache/`、`m2-skills/`、`m4-mcp/`、`m5-subagent/`
    是**无分支空壳目录**（被句柄锁着删不掉，已被 `.gitignore` 的 `/m[0-9]*-*/` 忽略），无害。
 
 ## 7. Orca 编排速查（本项目实际用法）
