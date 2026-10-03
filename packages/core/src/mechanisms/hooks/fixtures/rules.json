@@ -1,0 +1,55 @@
+{
+  "rules": [
+    {
+      "id": "deny-secret-write",
+      "tool": "write_file",
+      "argPattern": "(^|/)(\\.env|secrets?)($|/)",
+      "decision": "deny",
+      "reason": "writing secret files is forbidden"
+    },
+    {
+      "id": "deny-destructive-rm",
+      "tool": "run_shell",
+      "argPattern": "rm\\s+-[a-z]*r[a-z]*f|rm\\s+-[a-z]*f[a-z]*r",
+      "decision": "deny",
+      "reason": "recursive force delete is destructive"
+    },
+    {
+      "id": "ask-push-main",
+      "tool": "run_shell",
+      "argPattern": "git\\s+push\\b[^\"]*\\bmain\\b",
+      "decision": "ask",
+      "reason": "pushing to main requires approval"
+    },
+    {
+      "id": "ask-write",
+      "tool": "write_file",
+      "decision": "ask",
+      "reason": "writes mutate the workspace"
+    },
+    {
+      "id": "allow-read",
+      "tool": "read_file",
+      "decision": "allow",
+      "reason": "reads are side-effect free"
+    },
+    {
+      "id": "default-shell",
+      "tool": "run_shell",
+      "decision": "ask",
+      "reason": "shell commands require approval"
+    },
+    {
+      "id": "allow-list",
+      "tool": "list_dir",
+      "decision": "allow",
+      "reason": "listing is side-effect free"
+    },
+    {
+      "id": "default",
+      "tool": "*",
+      "decision": "ask",
+      "reason": "unknown tool; default ask"
+    }
+  ]
+}

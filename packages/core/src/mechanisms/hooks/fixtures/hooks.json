@@ -1,0 +1,58 @@
+{
+  "hooks": [
+    {
+      "id": "strip-sudo",
+      "events": ["preToolUse"],
+      "match": { "tool": "run_shell" },
+      "mutate": {
+        "target": "command",
+        "op": "replace",
+        "pattern": "^\\s*sudo\\s+",
+        "value": "",
+        "reason": "sudo stripped by policy hook"
+      }
+    },
+    {
+      "id": "deny-curl-pipe-sh",
+      "events": ["preToolUse"],
+      "match": { "tool": "run_shell", "argPattern": "curl[^|]*\\|\\s*(ba)?sh" },
+      "decision": "deny",
+      "reason": "refuse to pipe a download into a shell"
+    },
+    {
+      "id": "ask-secrets-read",
+      "events": ["preToolUse"],
+      "match": { "tool": "read_file", "argPattern": "(^|/)\\.env($|/)" },
+      "decision": "ask",
+      "reason": "reading .env requires approval"
+    },
+    {
+      "id": "annotate-prompt",
+      "events": ["userPromptSubmit"],
+      "mutate": {
+        "target": "text",
+        "op": "append",
+        "value": " [hook:prompt-annotated]",
+        "reason": "appended provenance marker"
+      }
+    },
+    {
+      "id": "compact-instructions",
+      "events": ["preCompact"],
+      "mutate": {
+        "target": "text",
+        "op": "prepend",
+        "value": "PRESERVE: decisions, file paths, TODO markers, open errors.\n",
+        "reason": "injected preservation instructions"
+      }
+    },
+    {
+      "id": "audit-tool-result",
+      "events": ["postToolUse"],
+      "match": { "toolRegex": "^(read_file|write_file|run_shell)$" },
+      "decision": "allow",
+      "reason": "post-tool audit recorded",
+      "note": "observational; no verdict change"
+    }
+  ]
+}
