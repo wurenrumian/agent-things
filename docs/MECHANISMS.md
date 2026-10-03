@@ -143,3 +143,28 @@ cache creation 的 0.76%"**；压缩后，attachment builders 会**重新宣告�
 5. subagent 回灌 vs 主上下文直做的 token 账。（M5）
 
 > 每解决一条，就在对应里程碑的机制文档里补上**实测数据**与结论。
+
+## 7. 实测结论（回填）
+
+### M1 缓存与 token 经济 — 详见 [`runs/m1-cache.md`](runs/m1-cache.md)
+
+模型：`xiaomi/mimo-v2.6-flash`（走自动前缀缓存，`cache_write_tokens` 恒为 0）。
+
+| 变量 | 实测结果 | 判定 |
+|---|---|---|
+| 相同请求 ×4 | 第 2 次起 `cached=3328/3371`（98.7%） | 前缀缓存可用 |
+| **反转 tools 数组顺序** | `cached` 3328 → **0**（3/3 复现） | §3 **confirmed** |
+| 追加 1 个工具（prompt +83） | `cached` → 0–512，代价 ~34–40× 新增字节 | §3 **confirmed** |
+| system 改 1 byte | `cached` → 512（丢 84.6%） | §2 **confirmed** |
+| append-only 只追加 | `cached` 恒定 3328（hit% 只随分母缓降） | §0/§2 **confirmed** |
+
+政策含义（已落到实现与路线图）：
+
+1. 工具 schema **绝不重排、绝不动态增删** → `ToolRegistry.list()` 按名稳定排序。
+2. system 前缀只增不改，易变内容（cwd 列表、最新 tool result）后置。
+3. 历史只追加；确需重置时，最多再预热 1 次相同调用即可恢复命中。
+
+成本：`mimo-v2.6-flash` 冷调用 `$0.000375`、命中 `$0.000309`（约 **-18%**）。
+
+> 尚未验证：skill 正文的注入方式（M2）、压缩后的缓存恢复曲线（M3）、
+> MCP server 增删的真实代价（M4）、subagent 回灌的 token 账（M5）。

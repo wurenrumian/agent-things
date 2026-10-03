@@ -20,12 +20,16 @@
   在 web 面板看到 messages / token / cache。
 - **验收**：`pnpm dev` 后能对一个真实仓库完成一次"读→改→跑"。
 
-### M1 — 缓存与 token 经济
+### M1 — 缓存与 token 经济 ✅
 
 - **机制**：`cache_control` 断点、sticky routing（`session_id`）、usage 观测、
   **工具排序抖动导致 cache miss 的复现**（MECHANISMS §3 的真实 bug）。
 - **实验**：同一会话连发两轮，观察 `cached_tokens`；再故意打乱工具顺序，观察归零。
-- **交付**：观测台新增"缓存命中率 / 累计成本"视图 + 一篇实测文档。
+- **交付**：实测数据见 [`docs/runs/m1-cache.md`](runs/m1-cache.md)，观测台新增 running
+  命中率/累计花费。
+- **实测（`xiaomi/mimo-v2.6-flash`）**：相同请求第 2 次起 `cached=3328/3371`（98.7%）；
+  **反转 tools 顺序 → cached 0**；追加 1 个工具（+83 token）→ cached 0–512（代价是新增
+  字节的 ~34–40 倍）；system 改 1 byte → 丢 84.6%；append-only 恒定 3328。
 
 ### M2 — Skills 与渐进披露
 
