@@ -25,7 +25,7 @@ pnpm monorepo（`packages/core` 内核 + `packages/server` HTTP/SSE + `apps/web`
 ## 3. Git 状态
 
 - 主 worktree：`D:/Project/agent-things`，分支唯一为 **`master`**。
-- 所有历史 worker 分支已删除。master 最新提交约 `868cf01`（INT-A brief）。
+- 所有历史 worker 分支已删除；当前只有 **`master`**，已并入 INT-A（merge `7fdeea1`）。
 - 模型：`xiaomi/mimo-v2.6-flash`；`.env` 在仓库根，**gitignored**，含 `OPENROUTER_API_KEY`。
 - TypeScript **7.0.2**（native），四份 manifest 均 `^7.0.2`；`pnpm typecheck` 全绿。
 - 后台还跑着 `pnpm dev`（server :8787 / web :5173）——shell id `sh_101a314e2001DHKUbQx0gQmZDv`。
@@ -46,28 +46,18 @@ pnpm monorepo（`packages/core` 内核 + `packages/server` HTTP/SSE + `apps/web`
 六个机制模块都在 `packages/core/src/mechanisms/`：`skills`、`mcp`、`subagent`、
 `compaction`、`hooks`、`checkpoint`、`scheduler`。
 
-## 5. ⚠️ 进行中：INT-A（整合工具型机制进 server）
+## 5. ✅ 最近完成：INT-A（工具型机制接入 server）
 
-**Orca 监督式编排**，`run_96e39172d0bd`：
+已合并入 master（merge `7fdeea1`，worker 提交 `5a6f49c`），并在 master **复验通过**：
 
-| 项 | 值 |
-|---|---|
-| task | `task_3bbc812c3e8e` |
-| dispatch | `ctx_1ea618672bb6` |
-| terminal | `term_8ead516d-c3d5-449a-92ee-05e5eb7f820e` |
-| worktree | `D:/Project/agent-things/int-a-tools` |
-| brief | `docs/briefs/int-a-tools.md` |
-| 内容 | 把 skills/MCP/subagent 挂进 server：新增 `mechanism` 事件 + `ToolResult.events`，`server/src/compose.ts`，`GET /api/mechanisms`，web Timeline 渲染；新增 env `SKILLS_DIR`/`MCP_SERVERS`/`SUBAGENT_MAX_STEPS` |
+- 新增 additive `mechanism` 事件 + 可选 `ToolResult.events`（`loop` 在 `tool.result` 后 yield）。
+- `packages/server/src/compose.ts`：builtin + `use_skill` + MCP stdio + `task`；
+  `GET /api/mechanisms`；env `SKILLS_DIR` / `MCP_SERVERS` / `SUBAGENT_MAX_STEPS`。
+- 复验（lib fixtures 启动）：`/api/config` 含 `use_skill`+`task`；
+  `/api/mechanisms` → skills `[code-review, release-notes]`、mcpServers `[echo]`；
+  空配置下 smoke 行为不变。证据见 `docs/runs/int-a.md`。
 
-**恢复等待**（一条命令，阻塞直到有效回调）：
-
-```
-orca orchestration check --run run_96e39172d0bd --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json
-```
-
-收到 `worker_done` 后：核对 → `worker-release --dispatch ctx_1ea618672bb6` →
-`check --ack <deliveryId> --run run_96e39172d0bd` → 合并 `refs/heads/int-a-tools` 到 master →
-`pnpm typecheck` + `pnpm --filter @agent/web build` → 复跑验证 → 回填 docs → 收回 worktree。
+自称后台 `pnpm dev` 仍在跑；启动验证时请用别的 `PORT` 避免与 :8787 冲突。
 
 ## 6. 待办
 
