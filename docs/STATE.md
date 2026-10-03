@@ -25,7 +25,7 @@ pnpm monorepo（`packages/core` 内核 + `packages/server` HTTP/SSE + `apps/web`
 ## 3. Git 状态
 
 - 主 worktree：`D:/Project/agent-things`，分支唯一为 **`master`**。
-- 所有历史 worker 分支已删除；当前只有 **`master`**，已并入 INT-A（`7fdeea1`）、INT-B1（`c80bff3`）与 INT-B2（`caf94a6`）。
+- 所有历史 worker 分支已删除；当前只有 **`master`**，已并入 INT-A/B1/B2 与 M8（最新 merge `aee94ec`）。
 - 模型：`xiaomi/mimo-v2.6-flash`；`.env` 在仓库根，**gitignored**，含 `OPENROUTER_API_KEY`。
 - TypeScript **7.0.2**（native），四份 manifest 均 `^7.0.2`；`pnpm typecheck` 全绿。
 - 后台还跑着 `pnpm dev`（server :8787 / web :5173）——shell id `sh_101a314e2001DHKUbQx0gQmZDv`。
@@ -71,15 +71,23 @@ pnpm monorepo（`packages/core` 内核 + `packages/server` HTTP/SSE + `apps/web`
 > 三个整合都保证 **未配置 ⇒ 行为不变**。master 复验：`/checkpoints` 空、`/tasks` 空、
 > `/compact` 409。后台 `pnpm dev` 仍在跑；验证时用别的 `PORT`。
 
-## 6. 待办
+**M8（会话 UX + CLI）** — merge `aee94ec`（worker `688a4ec`），已复验：
+- `Store.forkSession` + `POST /api/sessions/:id/fork` + web Fork 动作（fork@1 精确复制前缀）。
+- core `diff.ts` 的 `unifiedDiff`，`compose.ts` 包 `write_file`/`edit_file` 前后对比并发
+  `mechanism` diff 事件；web 新增 **Diff tab**。
+- `UsageTab` cost 汇总加标题行。
+- 新包 `packages/cli`（`@agent/cli`，bin `agent-things`）：复用 `@agent/core` 内核的
+  终端 REPL / one-shot，`--help` 正常，真实 turn 打印 usage/cost。
+- 复验（master）：CLI `--help` 正常；fork 路由新建会话 + 404；5 包 typecheck + web build 绿。
+  证据 `docs/runs/m8.md`。
 
-1. **M8（进行中）**：session fork + file-diff 视图 + cost 面板 + `agent-things` CLI。
-   `run_983890d8e95a` / task `task_de0a3448d0ec` / dispatch `ctx_4d5978f8cf32` /
-   terminal `term_97c0a9b4-0313-460a-a23d-f63a006194a7` / worktree `m8-session-ux-cli` /
-   brief `docs/briefs/m8-session-ux-cli.md`。
-   等待：`orca orchestration check --run run_983890d8e95a --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json`。
-2. 可选收尾：把 M2–M7 的机制在 web 观测台做成专面板（目前主要是 Timeline + Mechanisms 条带）。
-3. 清理：`m0-server/`、`m0-web/`、`m1-cache/`、`m2-skills/`、`m4-mcp/`、`m5-subagent/`
+## 6. 状态：**全部里程碑完成** 🎉
+
+M0–M8 与 INT-A/B1/B2 全部合入 `master`，`pnpm typecheck`（core/server/web/cli）+ web build 全绿。
+
+可选后续（非里程碑）：
+1. 把 M2–M7 的机制在 web 观测台做成**专面板**（目前主要是 Timeline + Mechanisms 条带 + Diff）。
+2. 清理：`m0-server/`、`m0-web/`、`m1-cache/`、`m2-skills/`、`m4-mcp/`、`m5-subagent/`
    是**无分支空壳目录**（被句柄锁着删不掉，已被 `.gitignore` 的 `/m[0-9]*-*/` 忽略），无害。
 
 ## 7. Orca 编排速查（本项目实际用法）
