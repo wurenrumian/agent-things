@@ -73,7 +73,11 @@ pnpm monorepo（`packages/core` 内核 + `packages/server` HTTP/SSE + `apps/web`
 
 ## 6. 待办
 
-1. **M8**：session fork / diff 可视化 / cost 面板 / 从内核导出 CLI（唯一剩余里程碑）。
+1. **M8（进行中）**：session fork + file-diff 视图 + cost 面板 + `agent-things` CLI。
+   `run_983890d8e95a` / task `task_de0a3448d0ec` / dispatch `ctx_4d5978f8cf32` /
+   terminal `term_97c0a9b4-0313-460a-a23d-f63a006194a7` / worktree `m8-session-ux-cli` /
+   brief `docs/briefs/m8-session-ux-cli.md`。
+   等待：`orca orchestration check --run run_983890d8e95a --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json`。
 2. 可选收尾：把 M2–M7 的机制在 web 观测台做成专面板（目前主要是 Timeline + Mechanisms 条带）。
 3. 清理：`m0-server/`、`m0-web/`、`m1-cache/`、`m2-skills/`、`m4-mcp/`、`m5-subagent/`
    是**无分支空壳目录**（被句柄锁着删不掉，已被 `.gitignore` 的 `/m[0-9]*-*/` 忽略），无害。
