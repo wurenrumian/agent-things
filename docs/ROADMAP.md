@@ -42,11 +42,16 @@
   **改写 system 前缀 → `cached` 塌到 640**。修正 MECHANISMS §2：只有"非追加地改动
   已缓存前缀"才失效，追加到 system 尾部等价于尾部消息。
 
-### M3 — 上下文压缩与回收
+### M3 — 上下文压缩与回收 ✅
 
-- **机制**：auto/manual compaction、tool-result clearing、固定位置摘要。
-- **实验**：压缩后第一/二轮缓存恢复曲线；固定位置摘要 vs 拼进历史。
-- **交付**：压缩器 + `/compact` 命令 + 实测文档（对齐 Claude Code 的 PreCompact 设计）。
+- **机制**：compaction（摘要化中段）、tool-result clearing、摘要位置对比。
+- **交付**：`mechanisms/compaction/`（纯消息数组变换 + transcript 校验器）、
+  [`docs/mechanisms/compaction.md`](mechanisms/compaction.md)、
+  [`docs/runs/m3-compaction.md`](runs/m3-compaction.md)。
+- **实测（25 calls）**：压缩 `30917 → 4808`（−84.4%）；**压缩后第 1 次 `cached=0`（必然
+  一次全量 re-warm），第 2 次回到 98.5%**。摘要**拼进历史**保留共享头 4608，**固定首槽**
+  仅保留 512（Δ=4096）→ 拼进历史明显更省缓存。`clearToolResults` 回收 50.1%
+  （vs compact 84.4%），恢复后命中 99.4%。
 
 ### M4 — MCP 上下文管理 ✅
 
@@ -65,15 +70,24 @@
 - **实测**：委派把父上下文最终 `prompt_tokens` **9420 → 858（−90.9%）**；总 token
   +15.5%（10544→12178）、成本 $0.00119→$0.00141。隔离缩小主上下文，代价是总 token 略增。
 
-### M6 — 权限、hooks、checkpoint
+### M6 — 权限、hooks、checkpoint ✅
 
-- **机制**：交互审批、PreToolUse/PostToolUse/PreCompact hook、对话/代码独立回滚。
-- **交付**：权限面板 + hook 系统 + rewind。
+- **机制**：HookRunner（preToolUse/postToolUse/preCompact/userPromptSubmit，匹配后返回
+  allow/deny/ask/mutate）、有序规则策略 + 统一 `decide()`、按 turn 的字节级 CheckpointStore。
+- **交付**：`mechanisms/hooks/`、`mechanisms/checkpoint/`、
+  [`docs/mechanisms/permissions.md`](mechanisms/permissions.md)、
+  [`docs/runs/m6-permissions.md`](runs/m6-permissions.md)。
+- **实测（零 API）**：决策表覆盖 allow/ask/deny/mutate/hook-deny；还原文本、二进制 0..255、
+  "快照时不存在、之后被创建"的文件均 sha256 一致，12/12 断言通过。代码回滚与对话回滚解耦。
 
-### M7 — background 与 scheduled tasks
+### M7 — background 与 scheduled tasks ✅
 
-- **机制**：非阻塞后台执行、定时任务、结果回灌策略。
-- **交付**：后台任务面板 + 调度器。
+- **机制**：Scheduler（one-shot/interval、非阻塞、状态捕获、cancel、drain）、
+  `runInBackground`、结果回灌为消息（并记录 event 映射，不改 `events.ts`）。
+- **交付**：`mechanisms/scheduler/`、[`docs/mechanisms/scheduler.md`](mechanisms/scheduler.md)、
+  [`docs/runs/m7-scheduler.md`](runs/m7-scheduler.md)。
+- **实测（零 API）**：定时任务 1018ms 触发；后台任务 +1ms 返回、+721ms settle；
+  cancel runs=0；interval 触发两次；结果回灌成消息。全部断言通过。
 
 ### M8 — 会话 UX 与 CLI 副产物
 
@@ -108,5 +122,8 @@ orca worktree create --name m2-skills --no-parent --agent <agent> \
 - [x] M2 skills 渐进披露（见 `docs/runs/m2-skills.md`）
 - [x] M4 MCP 上下文（见 `docs/runs/m4-mcp.md`）
 - [x] M5 subagent 上下文隔离（见 `docs/runs/m5-subagent.md`）
-- [ ] M3 压缩、M6 权限/hooks/checkpoint、M7 后台/定时
-- [ ] 把 M2/M4/M5 接入 HTTP server（协调者整合）
+- [x] M3 压缩与回收（见 `docs/runs/m3-compaction.md`）
+- [x] M6 权限/hooks/checkpoint（见 `docs/runs/m6-permissions.md`）
+- [x] M7 后台/定时任务（见 `docs/runs/m7-scheduler.md`）
+- [ ] 把 M2/M3/M4/M5/M6/M7 接入 HTTP server 与观测台（协调者整合）
+- [ ] M8 会话 UX 与 CLI 副产物

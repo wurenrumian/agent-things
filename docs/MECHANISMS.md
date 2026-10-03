@@ -166,8 +166,21 @@ cache creation 的 0.76%"**；压缩后，attachment builders 会**重新宣告�
 
 成本：`mimo-v2.6-flash` 冷调用 `$0.000375`、命中 `$0.000309`（约 **-18%**）。
 
-> 尚未验证：压缩后的缓存恢复曲线（M3）、skill/MCP/subagent 接入 HTTP server 后的
-> 端到端行为（整合）、M6/M7。
+### M3 上下文压缩 — 详见 [`runs/m3-compaction.md`](runs/m3-compaction.md)
+
+压缩把 prompt 从 **30917 → 4808**（−84.4%）。**压缩必然付一次全量 re-warm**：压缩后第 1 次
+`cached=0`，第 2 次相同请求回到 ~98.5%。摘要位置很关键：**拼进历史**保留共享头 4608 token，
+**固定首槽**只保留 512（Δ=4096）——即"把摘要当作历史的一部分重写"比"另起一个固定槽位"更省缓存。
+`clearToolResults` 回收 50.1%（弱于 compact 的 84.4%），但恢复后命中 99.4%。
+
+### M6 权限/hooks/checkpoint — 详见 [`runs/m6-permissions.md`](runs/m6-permissions.md)
+
+HookRunner + 有序规则 + 统一 `decide()`（allow/ask/deny/mutate）；checkpoint 字节级还原
+12/12 通过。**这是实现类里程碑，不涉及缓存实验。**
+
+### M7 后台/定时 — 详见 [`runs/m7-scheduler.md`](runs/m7-scheduler.md)
+
+Scheduler / `runInBackground` / 结果回灌；全部断言通过。**实现类里程碑，零 API 调用。**
 
 ### M2 Skills 渐进披露 — 详见 [`runs/m2-skills.md`](runs/m2-skills.md)
 
