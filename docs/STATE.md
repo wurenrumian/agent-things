@@ -81,14 +81,24 @@ pnpm monorepo（`packages/core` 内核 + `packages/server` HTTP/SSE + `apps/web`
 - 复验（master）：CLI `--help` 正常；fork 路由新建会话 + 404；5 包 typecheck + web build 绿。
   证据 `docs/runs/m8.md`。
 
-## 6. 状态：**全部里程碑完成** 🎉
+## 6. 状态：**全部里程碑完成** 🎉（已打 tag `v1`）
 
 M0–M8 与 INT-A/B1/B2 全部合入 `master`，`pnpm typecheck`（core/server/web/cli）+ web build 全绿。
+`README.md` 已更新到 v1。
 
 可选后续（非里程碑）：
 1. 把 M2–M7 的机制在 web 观测台做成**专面板**（目前主要是 Timeline + Mechanisms 条带 + Diff）。
-2. 清理：`m0-server/`、`m0-web/`、`m1-cache/`、`m2-skills/`、`m4-mcp/`、`m5-subagent/`
-   是**无分支空壳目录**（被句柄锁着删不掉，已被 `.gitignore` 的 `/m[0-9]*-*/` 忽略），无害。
+2. 空壳目录：`m0-server/ m0-web/ m1-cache/ m2-skills/ m3-compaction/ m4-mcp/ m5-subagent/
+   m6-permissions/ m7-scheduler/ m8-session-ux-cli/ int-a-tools/ int-b1-loop/ int-b2-checkpoint-scheduler/`
+   都是**空的**、无分支、无 git worktree 注册、已被 `.gitignore` 忽略。它们被**常驻的
+   Orca/opencode 宿主进程**（repo watcher）持句柄，**在会话内删不掉**（`rmdir` 报
+   "being used by another process"）。无害。**关闭 Orca 后**运行：
+
+   ```powershell
+   Get-ChildItem D:\Project\agent-things -Directory |
+     Where-Object { $_.Name -match '^(m[0-9]+-.+|int-.+)$' } |
+     Remove-Item -Recurse -Force
+   ```
 
 ## 7. Orca 编排速查（本项目实际用法）
 
