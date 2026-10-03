@@ -108,7 +108,7 @@ export interface ContextBreakdown {
   sections: ContextSection[];
 }
 
-export type PermissionDecision = "allow" | "deny";
+export type PermissionDecision = "allow" | "deny" | "ask";
 
 export type TurnEndReason = "stop" | "max_steps" | "error" | "aborted";
 

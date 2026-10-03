@@ -7,12 +7,14 @@ import { estimateTokens, messageText, withCacheBreakpoint } from "../content.js"
 import type {
   AgentEvent,
   ContextBreakdown,
+  PermissionDecision,
   TurnEndReason,
 } from "../events.js";
 import { decidePermission, type PermissionMode } from "../permissions.js";
 import type { OpenRouterClient } from "../provider/openrouter.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import type { ChatMessage, ToolCall, UserMessage } from "../types.js";
+import type { HookRunner } from "../mechanisms/hooks/runner.js";
 
 /**
  * The agent loop — the "L0" kernel.
@@ -27,6 +29,57 @@ import type { ChatMessage, ToolCall, UserMessage } from "../types.js";
  * prefix intact across steps.
  */
 
+/**
+ * The request a {@link AgentConfig.gate} is asked to rule on. The gate is the
+ * M6 seam: it replaces the coarse `decidePermission(mode, tool)` with a policy +
+ * hooks decision that may also rewrite `input`.
+ */
+export interface GateRequest {
+  tool: string;
+  input: Record<string, unknown>;
+  turnId: string;
+}
+
+/**
+ * A gate's verdict. `input` is what the tool is executed with — hook mutations
+ * ride here. `records`/`mutated` are optional observability the loop relays as
+ * a `mechanism` event; a gate that does not set them still works.
+ */
+export interface GateResult {
+  decision: PermissionDecision;
+  reason: string;
+  input: Record<string, unknown>;
+  /** Ordered audit trace from the policy/hooks (rendered as `mechanism`). */
+  records?: unknown[];
+  /** True when the gate rewrote `input`. */
+  mutated?: boolean;
+}
+
+/**
+ * Automatic compaction (M3). `compact` folds the current history into a new
+ * array and reports what it did in `info`; `instructions` carries the text a
+ * `preCompact` hook injected for the summarizer.
+ */
+export interface AgentCompactor {
+  thresholdTokens: number;
+  compact(
+    messages: ChatMessage[],
+    instructions?: string,
+  ): Promise<{ messages: ChatMessage[]; info: Record<string, unknown> }>;
+}
+
+/** Observability payload for one compaction (returned by `compactNow`). */
+export interface CompactionReport {
+  before: number;
+  after: number;
+  summarized: number;
+  keptRecent: number;
+  keptLeading: number;
+  placement: string;
+  /** `preCompact` hook records, when hooks are configured. */
+  records?: unknown[];
+}
+
 export interface AgentConfig {
   client: OpenRouterClient;
   model: string;
@@ -38,6 +91,18 @@ export interface AgentConfig {
   /** Replace the assembled system prompt entirely (for experiments). */
   systemPromptOverride?: string;
   platform?: string;
+  /**
+   * M6 tool gate. When set it replaces `decidePermission`; the returned `input`
+   * is what the tool executes with. Absent ⇒ the original mode gate, unchanged.
+   */
+  gate?: (req: GateRequest) => Promise<GateResult>;
+  /**
+   * M6 lifecycle hooks. Drives the text points (`userPromptSubmit`,
+   * `preCompact`) and the observational `postToolUse`.
+   */
+  hooks?: HookRunner;
+  /** M3 automatic compaction. Absent ⇒ history is never folded. */
+  compaction?: AgentCompactor;
 }
 
 export interface AgentSnapshot {
@@ -96,7 +161,27 @@ export class Agent {
       at: startedAt,
     });
 
-    const userMessage: UserMessage = { role: "user", content: input };
+    // M6: `userPromptSubmit` hooks may rewrite the text before it enters the
+    // model. Off unless a HookRunner is configured, so the smoke path is
+    // byte-for-byte unchanged.
+    let promptInput = input;
+    if (this.config.hooks) {
+      const { text, result } = await this.config.hooks.runText(
+        "userPromptSubmit",
+        input,
+        turnId,
+      );
+      promptInput = text;
+      yield emit({
+        type: "mechanism",
+        name: "hooks",
+        phase: "userPromptSubmit",
+        data: { records: result.records },
+        at: Date.now(),
+      });
+    }
+
+    const userMessage: UserMessage = { role: "user", content: promptInput };
     this.messages.push(userMessage);
 
     const maxSteps = this.config.maxSteps ?? 24;
@@ -106,6 +191,31 @@ export class Agent {
       const prompt = await this.systemPrompt();
 
       for (let step = 0; step < maxSteps; step++) {
+        // M3: at the top of each step (at most once), fold history when its
+        // estimated size exceeds the configured threshold.
+        if (this.config.compaction) {
+          const before = this.estimateHistoryTokens();
+          if (before > this.config.compaction.thresholdTokens) {
+            const report = await this.compactHistory(turnId);
+            if (report.records) {
+              yield emit({
+                type: "mechanism",
+                name: "hooks",
+                phase: "preCompact",
+                data: { records: report.records },
+                at: Date.now(),
+              });
+            }
+            yield emit({
+              type: "mechanism",
+              name: "compaction",
+              phase: "compacted",
+              data: report,
+              at: Date.now(),
+            });
+          }
+        }
+
         const requestMessages = this.compileMessages(prompt);
         yield emit({
           type: "context.compiled",
@@ -154,7 +264,7 @@ export class Agent {
         }
 
         for (const call of toolCalls) {
-          yield* this.executeToolCall(call, permissionMode, signal);
+          yield* this.executeToolCall(call, permissionMode, turnId, signal);
         }
       }
 
@@ -184,9 +294,68 @@ export class Agent {
     ];
   }
 
+  /** Coarse estimate of the live history's size (display heuristic). */
+  private estimateHistoryTokens(): number {
+    return estimateTokens(this.messages.map((m) => messageText(m)).join("\n"));
+  }
+
+  /**
+   * Force one compaction of the live history now. Returns the observability
+   * report, or `null` when compaction is not configured. Additive API used by
+   * `POST /api/sessions/:id/compact`.
+   */
+  async compactNow(): Promise<CompactionReport | null> {
+    if (!this.config.compaction) return null;
+    return this.compactHistory();
+  }
+
+  /**
+   * Run the `preCompact` hooks (if any) for their summarizer instructions, fold
+   * the history through the configured compactor, replace `this.messages`, and
+   * report before/after token estimates.
+   */
+  private async compactHistory(turnId?: string): Promise<CompactionReport> {
+    const compaction = this.config.compaction!;
+    const before = this.estimateHistoryTokens();
+
+    let instructions: string | undefined;
+    let records: unknown[] | undefined;
+    if (this.config.hooks) {
+      const { text, result } = await this.config.hooks.runText(
+        "preCompact",
+        "",
+        turnId,
+      );
+      instructions = text;
+      records = result.records;
+    }
+
+    const { messages, info } = await compaction.compact(
+      this.messages,
+      instructions,
+    );
+    this.messages = messages;
+    const after = this.estimateHistoryTokens();
+
+    const number = (value: unknown, fallback = 0): number =>
+      typeof value === "number" && Number.isFinite(value) ? value : fallback;
+
+    return {
+      before,
+      after,
+      summarized: number(info["summarized"]),
+      keptRecent: number(info["keptRecent"]),
+      keptLeading: number(info["keptLeading"]),
+      placement:
+        typeof info["placement"] === "string" ? info["placement"] : "spliced",
+      records,
+    };
+  }
+
   private async *executeToolCall(
     call: ToolCall,
     mode: PermissionMode,
+    turnId: string,
     signal?: AbortSignal,
   ): AsyncGenerator<AgentEvent> {
     let input: Record<string, unknown> = {};
@@ -225,7 +394,41 @@ export class Agent {
       return;
     }
 
-    const { decision, reason } = decidePermission(mode, tool);
+    // The M6 gate (policy + hooks) replaces the coarse mode gate when set; its
+    // returned `input` is what the tool actually executes with.
+    let decision: PermissionDecision;
+    let reason: string;
+    let executedInput = input;
+    let gateTrace: unknown[] | undefined;
+    let gateMutated: boolean | undefined;
+    if (this.config.gate) {
+      const gate = await this.config.gate({
+        tool: tool.name,
+        input,
+        turnId,
+      });
+      decision = gate.decision;
+      reason = gate.reason;
+      executedInput = gate.input;
+      gateTrace = gate.records;
+      gateMutated = gate.mutated;
+      yield {
+        type: "mechanism",
+        name: "hooks",
+        phase: "preToolUse",
+        data: {
+          records: gateTrace ?? [],
+          mutated: gateMutated ?? false,
+          input: executedInput,
+        },
+        at: Date.now(),
+      };
+    } else {
+      const outcome = decidePermission(mode, tool);
+      decision = outcome.decision;
+      reason = outcome.reason;
+    }
+
     yield {
       type: "permission.decision",
       toolCallId: call.id,
@@ -244,12 +447,27 @@ export class Agent {
       return;
     }
 
+    // `ask` is a pending approval. Non-interactively we cannot wait for a
+    // human, so only `yolo` proceeds; the event above still records the true
+    // verdict either way.
+    if (decision === "ask" && mode !== "yolo") {
+      this.messages.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: `Blocked: pending approval (non-interactive) — ${reason}`,
+      });
+      return;
+    }
+
     const startedAt = Date.now();
     let output: string;
     let isError = false;
     let events: AgentEvent[] = [];
     try {
-      const result = await tool.execute(input, { cwd: this.config.cwd, signal });
+      const result = await tool.execute(executedInput, {
+        cwd: this.config.cwd,
+        signal,
+      });
       output = result.output;
       isError = result.isError ?? false;
       events = result.events ?? [];
@@ -271,6 +489,24 @@ export class Agent {
     // Mechanism tools surface progress through `ToolResult.events`; the loop
     // just relays them in order. Purely additive: builtins return none.
     for (const event of events) yield event;
+
+    // M6: `postToolUse` is observational — it may audit/redact in its own
+    // record but cannot change the tool output.
+    if (this.config.hooks) {
+      const run = await this.config.hooks.run("postToolUse", {
+        event: "postToolUse",
+        tool: tool.name,
+        input: executedInput,
+        turnId,
+      });
+      yield {
+        type: "mechanism",
+        name: "hooks",
+        phase: "postToolUse",
+        data: { records: run.records },
+        at: Date.now(),
+      };
+    }
 
     this.messages.push({
       role: "tool",

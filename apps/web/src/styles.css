@@ -960,6 +960,23 @@ button {
 .tl-permission-decision .tl-type {
   color: var(--amber);
 }
+.tl-decision-ask .tl-type {
+  color: #f0b429;
+}
+.tl-decision-ask .tl-brief {
+  color: #f0b429;
+  font-weight: 600;
+}
+.tl-decision-ask .tl-brief::before {
+  content: "⏸ ";
+}
+.tl-decision-deny .tl-brief {
+  color: var(--red);
+  font-weight: 600;
+}
+.tl-decision-allow .tl-brief {
+  color: var(--green);
+}
 .tl-tool-call .tl-type {
   color: var(--tool);
 }

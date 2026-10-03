@@ -2,8 +2,10 @@ import {
   OpenRouterClient,
   ToolRegistry,
   builtinTools,
+  messageText,
   type AgentConfig,
   type AgentEvent,
+  type ChatMessage,
   type JSONSchema,
   type ToolDef,
   type ToolResult,
@@ -22,6 +24,13 @@ import {
   createTaskTool,
   type SubagentRun,
 } from "../../core/src/mechanisms/subagent/index.js";
+import {
+  HookRunner,
+  Policy,
+  decide,
+  loadHooksFile,
+} from "../../core/src/mechanisms/hooks/index.js";
+import { compactDetailed } from "../../core/src/mechanisms/compaction/index.js";
 
 /**
  * Composition root (the "L8" wiring step).
@@ -55,6 +64,40 @@ export interface ComposedAgent {
 
 function mechanismEvent(name: string, phase: string, data?: unknown): AgentEvent {
   return { type: "mechanism", name, phase, data, at: Date.now() };
+}
+
+/**
+ * M3 summarizer: turn the folded `middle` of a transcript into one dense
+ * summary using the shared client. `instructions` is the text injected by a
+ * `preCompact` hook. Streaming-only client, so we accumulate `chatStream`.
+ */
+async function summarizeMiddle(
+  client: OpenRouterClient,
+  model: string,
+  middle: ChatMessage[],
+  instructions?: string,
+): Promise<string> {
+  const transcript = middle
+    .map((message) => `${message.role}: ${messageText(message)}`)
+    .join("\n");
+  const directive =
+    "You compress a coding agent's conversation history into a dense, factual " +
+    "summary. Preserve decisions, file paths, commands, errors, and open TODOs. " +
+    "Return only the summary text.";
+  const prompt =
+    (instructions && instructions.trim().length > 0
+      ? `${instructions.trim()}\n\n`
+      : "") + `Summarize this transcript:\n\n${transcript}`;
+
+  const result = await client.chatStream({
+    model,
+    messages: [
+      { role: "system", content: directive },
+      { role: "user", content: prompt },
+    ],
+    temperature: 0,
+  });
+  return (result.message.content ?? "").trim();
 }
 
 /** Wrap a `ToolDef` so each call appends exactly one observable event. */
@@ -110,6 +153,81 @@ export async function composeAgent(config: ServerConfig): Promise<ComposedAgent>
     referer: config.referer,
     title: config.title,
   });
+
+  /* ------------------------------------------------- hooks / permissions (M6) */
+
+  const hooks = config.hooksFile
+    ? new HookRunner(await loadHooksFile(config.hooksFile))
+    : undefined;
+  console.log(
+    hooks
+      ? `[server] hooks: ${hooks.list().length} loaded from ${config.hooksFile}`
+      : "[server] hooks: none (HOOKS_FILE unset)",
+  );
+
+  const policy = config.policyFile
+    ? await Policy.fromFile(config.policyFile)
+    : undefined;
+  console.log(
+    policy
+      ? `[server] policy: ${policy.list().length} rule(s) from ${config.policyFile}`
+      : "[server] policy: none (POLICY_FILE unset)",
+  );
+
+  // The gate exists when either half is configured; a missing half falls back
+  // to the mechanism default (empty policy ⇒ ask, no hooks ⇒ no rewrites).
+  const gate: AgentConfig["gate"] =
+    hooks || policy
+      ? async (request) => {
+          const decision = await decide(
+            policy ?? new Policy([]),
+            hooks ?? new HookRunner(),
+            request,
+          );
+          return {
+            decision: decision.kind,
+            reason: decision.reason,
+            input: decision.input,
+            records: decision.trace,
+            mutated: decision.mutated,
+          };
+        }
+      : undefined;
+
+  /* ------------------------------------------------------- compaction (M3) */
+
+  const compaction: AgentConfig["compaction"] =
+    config.compactThresholdTokens > 0
+      ? {
+          thresholdTokens: config.compactThresholdTokens,
+          async compact(messages, instructions) {
+            const result = await compactDetailed(messages, {
+              keepRecent: config.compactKeepRecent,
+              keepLeading: config.compactKeepLeading,
+              placement: config.compactPlacement,
+              summarize: (middle) =>
+                summarizeMiddle(client, config.model, middle, instructions),
+            });
+            return {
+              messages: result.messages,
+              info: {
+                summarized: result.summarized,
+                keptLeading: result.keptLeading,
+                keptRecent: result.keptRecent,
+                placement: config.compactPlacement,
+                summaryIndex: result.summaryIndex,
+              },
+            };
+          },
+        }
+      : undefined;
+  console.log(
+    compaction
+      ? `[server] compaction: threshold=${config.compactThresholdTokens} tok ` +
+          `keepRecent=${config.compactKeepRecent} keepLeading=${config.compactKeepLeading} ` +
+          `placement=${config.compactPlacement}`
+      : "[server] compaction: none (COMPACT_THRESHOLD_TOKENS unset/0)",
+  );
 
   const tools = new ToolRegistry();
   for (const tool of builtinTools()) tools.register(tool);
@@ -217,6 +335,9 @@ export async function composeAgent(config: ServerConfig): Promise<ComposedAgent>
     cwd: config.cwd,
     permissionMode: config.permissionMode,
   };
+  if (gate) agentConfig.gate = gate;
+  if (hooks) agentConfig.hooks = hooks;
+  if (compaction) agentConfig.compaction = compaction;
 
   let closed = false;
   return {

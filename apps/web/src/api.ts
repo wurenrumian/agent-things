@@ -55,6 +55,23 @@ export async function getEvents(id: string): Promise<StoredEvent[]> {
   );
 }
 
+export interface CompactionResult {
+  before: number;
+  after: number;
+  summarized: number;
+  keptRecent: number;
+  keptLeading: number;
+  placement: string;
+}
+
+/** Force one compaction of a session's live history (M3). */
+export function compactSession(id: string): Promise<CompactionResult> {
+  return request<CompactionResult>(
+    `/api/sessions/${encodeURIComponent(id)}/compact`,
+    { method: "POST" },
+  );
+}
+
 export interface StreamHandlers {
   onEvent: (event: AgentEvent) => void;
   onError?: (error: Error) => void;

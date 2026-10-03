@@ -27,8 +27,11 @@ export function TimelineTab({ events }: TimelineTabProps) {
 }
 
 function TimelineRow({ event, index }: { event: AgentEvent; index: number }) {
+  const decision =
+    event.type === "permission.decision" ? event.decision : undefined;
+  const decisionClass = decision ? ` tl-decision-${decision}` : "";
   return (
-    <details className={`tl-row tl-${event.type.replace(".", "-")}`}>
+    <details className={`tl-row tl-${event.type.replace(".", "-")}${decisionClass}`}>
       <summary className="tl-summary">
         <span className="tl-seq">{String(index).padStart(3, "0")}</span>
         <span className="tl-time">{formatTime(event.at)}</span>
@@ -56,8 +59,11 @@ function summarize(event: AgentEvent): string {
       return truncate(event.text);
     case "assistant.message":
       return truncate(contentToText(event.message.content ?? "(tool calls)"));
-    case "permission.decision":
-      return `${event.decision} ${event.name} — ${event.reason}`;
+    case "permission.decision": {
+      const verdict =
+        event.decision === "ask" ? "ASK (pending approval)" : event.decision;
+      return `${verdict} ${event.name} — ${event.reason}`;
+    }
     case "tool.call":
       return `${event.name}(${truncate(JSON.stringify(event.input))})`;
     case "tool.result":

@@ -133,6 +133,51 @@ function buildApp(rt: Runtime): Hono {
     return c.json(rt.store.getEvents(id));
   });
 
+  /** Force one compaction of the live agent's history now (M3). */
+  app.post("/api/sessions/:id/compact", async (c) => {
+    const id = c.req.param("id");
+    const session = rt.store.getSession(id);
+    if (!session) return c.json({ error: "session not found" }, 404);
+
+    const agent = getAgent(rt, session);
+    const report = await agent.compactNow();
+    if (!report) {
+      return c.json(
+        { error: "compaction is not configured (set COMPACT_THRESHOLD_TOKENS)" },
+        409,
+      );
+    }
+
+    rt.store.saveMessages(id, agent.messages);
+    rt.store.touch(id);
+    rt.store.appendEvents(id, [
+      {
+        type: "mechanism",
+        name: "compaction",
+        phase: "compacted",
+        data: {
+          before: report.before,
+          after: report.after,
+          summarized: report.summarized,
+          keptRecent: report.keptRecent,
+          keptLeading: report.keptLeading,
+          placement: report.placement,
+          via: "api",
+        },
+        at: Date.now(),
+      },
+    ]);
+
+    return c.json({
+      before: report.before,
+      after: report.after,
+      summarized: report.summarized,
+      keptRecent: report.keptRecent,
+      keptLeading: report.keptLeading,
+      placement: report.placement,
+    });
+  });
+
   app.post("/api/sessions/:id/messages", async (c) => {
     const id = c.req.param("id");
     const session = rt.store.getSession(id);
