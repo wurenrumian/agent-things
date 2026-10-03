@@ -1,3 +1,4 @@
+import type { AgentEvent } from "../events.js";
 import type { JSONSchema, ToolSchema } from "../types.js";
 
 /**
@@ -13,6 +14,13 @@ export interface ToolContext {
 export interface ToolResult {
   output: string;
   isError?: boolean;
+  /**
+   * Optional events the loop yields (in order) immediately after `tool.result`.
+   * Mechanism tools use this to report progress — e.g. a `mechanism` event —
+   * without the loop having to know each mechanism. They never enter the
+   * model's context; only `output` does.
+   */
+  events?: AgentEvent[];
 }
 
 export interface ToolDef {

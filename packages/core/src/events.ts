@@ -67,4 +67,17 @@ export type AgentEvent =
       at: number;
     }
   | { type: "usage"; usage: Usage; at: number }
+  /**
+   * Additive, mechanism-agnostic progress signal. A mechanism tool (skills,
+   * MCP, subagent, …) attaches these to its `ToolResult.events`; the loop
+   * yields them right after `tool.result`, so the observatory can show what a
+   * mechanism did without the loop knowing anything about that mechanism.
+   */
+  | {
+      type: "mechanism";
+      name: string;
+      phase: string;
+      data?: unknown;
+      at: number;
+    }
   | { type: "turn.end"; reason: TurnEndReason; error?: string; at: number };

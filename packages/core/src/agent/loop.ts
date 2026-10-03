@@ -247,10 +247,12 @@ export class Agent {
     const startedAt = Date.now();
     let output: string;
     let isError = false;
+    let events: AgentEvent[] = [];
     try {
       const result = await tool.execute(input, { cwd: this.config.cwd, signal });
       output = result.output;
       isError = result.isError ?? false;
+      events = result.events ?? [];
     } catch (err) {
       output = err instanceof Error ? err.message : String(err);
       isError = true;
@@ -265,6 +267,10 @@ export class Agent {
       durationMs: Date.now() - startedAt,
       at: Date.now(),
     };
+
+    // Mechanism tools surface progress through `ToolResult.events`; the loop
+    // just relays them in order. Purely additive: builtins return none.
+    for (const event of events) yield event;
 
     this.messages.push({
       role: "tool",

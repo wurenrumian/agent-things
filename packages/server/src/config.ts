@@ -56,6 +56,18 @@ export function loadDotEnv(file: string): void {
   }
 }
 
+/** One entry of `MCP_SERVERS`: a stdio MCP server to connect at startup. */
+export interface McpServerConfig {
+  /** Human-readable id, used for `/api/mechanisms` and log lines. */
+  name: string;
+  /** Executable to launch (e.g. `node`, `npx`, `uvx`). */
+  command: string;
+  /** Arguments passed to the executable. */
+  args: string[];
+  /** Extra environment variables for the child process. */
+  env?: Record<string, string>;
+}
+
 export interface ServerConfig {
   /** Repo root; DATA_DIR defaults and AGENT_CWD resolve against it. */
   repoRoot: string;
@@ -69,6 +81,12 @@ export interface ServerConfig {
   permissionMode: PermissionMode;
   /** Directory the agent operates on. */
   cwd: string;
+  /** Absolute directory scanned for skill subdirectories (each has SKILL.md). */
+  skillsDir: string;
+  /** MCP servers to connect at startup (empty = none). */
+  mcpServers: McpServerConfig[];
+  /** Step ceiling handed to each nested subagent (`task` tool). */
+  subagentMaxSteps: number;
 }
 
 function parsePermissionMode(raw: string | undefined): PermissionMode {
@@ -77,6 +95,79 @@ function parsePermissionMode(raw: string | undefined): PermissionMode {
   throw new Error(
     `Invalid PERMISSION_MODE "${raw}" (expected yolo | standard | readonly).`,
   );
+}
+
+function parsePositiveInt(raw: string | undefined, fallback: number, key: string): number {
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`Invalid ${key} "${raw}" (expected a positive integer).`);
+  }
+  return value;
+}
+
+/**
+ * Parse `MCP_SERVERS`: a JSON array of `{ name, command, args, env? }`. Absent
+ * or empty means "no MCP servers" — the kernel then behaves exactly as before.
+ */
+function parseMcpServers(raw: string | undefined): McpServerConfig[] {
+  const text = (raw ?? "").trim();
+  if (text === "") return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    throw new Error(
+      `Invalid MCP_SERVERS JSON: ${err instanceof Error ? err.message : String(err)}. ` +
+        `Expected an array like [{"name":"echo","command":"node","args":["server.mjs"]}].`,
+    );
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error("Invalid MCP_SERVERS: expected a JSON array.");
+  }
+  return parsed.map((entry, index) => {
+    if (typeof entry !== "object" || entry === null) {
+      throw new Error(`Invalid MCP_SERVERS[${index}]: expected an object.`);
+    }
+    const record = entry as Record<string, unknown>;
+    const name = typeof record["name"] === "string" ? record["name"].trim() : "";
+    const command =
+      typeof record["command"] === "string" ? record["command"].trim() : "";
+    if (name === "" || command === "") {
+      throw new Error(
+        `Invalid MCP_SERVERS[${index}]: "name" and "command" are required strings.`,
+      );
+    }
+    const rawArgs = record["args"];
+    if (rawArgs !== undefined && !Array.isArray(rawArgs)) {
+      throw new Error(`Invalid MCP_SERVERS[${index}].args: expected an array.`);
+    }
+    const args = (rawArgs ?? []).map((arg, argIndex) => {
+      if (typeof arg !== "string") {
+        throw new Error(
+          `Invalid MCP_SERVERS[${index}].args[${argIndex}]: expected a string.`,
+        );
+      }
+      return arg;
+    });
+    let env: Record<string, string> | undefined;
+    const rawEnv = record["env"];
+    if (rawEnv !== undefined) {
+      if (typeof rawEnv !== "object" || rawEnv === null || Array.isArray(rawEnv)) {
+        throw new Error(`Invalid MCP_SERVERS[${index}].env: expected an object.`);
+      }
+      env = {};
+      for (const [key, value] of Object.entries(rawEnv as Record<string, unknown>)) {
+        if (typeof value !== "string") {
+          throw new Error(
+            `Invalid MCP_SERVERS[${index}].env.${key}: expected a string.`,
+          );
+        }
+        env[key] = value;
+      }
+    }
+    return env ? { name, command, args, env } : { name, command, args };
+  });
 }
 
 export function loadConfig(): ServerConfig {
@@ -101,6 +192,8 @@ export function loadConfig(): ServerConfig {
     ? path.resolve(repoRoot, process.env["AGENT_CWD"])
     : repoRoot;
 
+  const rawSkillsDir = process.env["SKILLS_DIR"]?.trim();
+
   return {
     repoRoot,
     apiKey,
@@ -111,5 +204,15 @@ export function loadConfig(): ServerConfig {
     dbFile: path.join(dataDir, "agent.db"),
     permissionMode: parsePermissionMode(process.env["PERMISSION_MODE"]),
     cwd: agentCwd,
+    skillsDir: path.resolve(
+      repoRoot,
+      rawSkillsDir && rawSkillsDir.length > 0 ? rawSkillsDir : "./skills",
+    ),
+    mcpServers: parseMcpServers(process.env["MCP_SERVERS"]),
+    subagentMaxSteps: parsePositiveInt(
+      process.env["SUBAGENT_MAX_STEPS"],
+      12,
+      "SUBAGENT_MAX_STEPS",
+    ),
   };
 }

@@ -429,6 +429,38 @@ button {
   background: var(--bg);
 }
 
+.mechanism-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.mechanism-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+.mechanism-label {
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+}
+
+.mechanism-value {
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .tabs {
   display: flex;
   gap: 2px;
@@ -933,6 +965,9 @@ button {
 }
 .tl-tool-result .tl-type {
   color: var(--tool);
+}
+.tl-mechanism .tl-type {
+  color: #56d4dd;
 }
 .tl-usage .tl-type {
   color: var(--green);

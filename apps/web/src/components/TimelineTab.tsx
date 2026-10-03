@@ -64,6 +64,11 @@ function summarize(event: AgentEvent): string {
       return `${event.name} · ${event.isError ? "ERROR" : "ok"} · ${event.durationMs}ms · ${truncate(event.output)}`;
     case "usage":
       return `prompt ${event.usage.prompt_tokens ?? 0} · completion ${event.usage.completion_tokens ?? 0} · cached ${event.usage.prompt_tokens_details?.cached_tokens ?? 0}`;
+    case "mechanism": {
+      const detail =
+        event.data === undefined ? "" : ` · ${truncate(JSON.stringify(event.data))}`;
+      return `${event.name} · ${event.phase}${detail}`;
+    }
     case "turn.end":
       return event.error ? `${event.reason}: ${event.error}` : event.reason;
     default:
