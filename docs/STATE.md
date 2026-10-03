@@ -67,8 +67,11 @@ pnpm monorepo（`packages/core` 内核 + `packages/server` HTTP/SSE + `apps/web`
 
 ## 6. 待办
 
-1. **INT-B2（下一步）**：checkpoint + scheduler 接入 —— `ToolContext` 加 `turnId` / `checkpoints`、
-   写入前快照、恢复路由、`task.settled` 事件 + 结果回灌。需先写 `docs/briefs/int-b2-*.md` 再派 worker。
+1. **INT-B2（进行中）**：checkpoint + scheduler 接入。
+   `run_ee6e7ed91d2f` / task `task_d869257d8869` / dispatch `ctx_af61e3b6e2c7` /
+   terminal `term_813cbb91-d7c2-4bef-af74-a40169c86eb9` / worktree `int-b2-checkpoint-scheduler` /
+   brief `docs/briefs/int-b2-checkpoint-scheduler.md`。
+   等待：`orca orchestration check --run run_ee6e7ed91d2f --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json`。
 2. **M8**：session fork / diff 可视化 / cost 面板 / 从内核导出 CLI。
 3. 清理：`m0-server/`、`m0-web/`、`m1-cache/`、`m2-skills/`、`m4-mcp/`、`m5-subagent/`
    是**无分支空壳目录**（被句柄锁着删不掉，已被 `.gitignore` 的 `/m[0-9]*-*/` 忽略），无害。
