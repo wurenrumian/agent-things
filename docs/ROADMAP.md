@@ -89,10 +89,13 @@
 - **实测（零 API）**：定时任务 1018ms 触发；后台任务 +1ms 返回、+721ms settle；
   cancel runs=0；interval 触发两次；结果回灌成消息。全部断言通过。
 
-### M8 — 会话 UX 与 CLI 副产物
+### M8 — 会话 UX 与 CLI 副产物 ✅
 
 - **机制**：session fork、diff 可视化、cost 面板；从同一内核导出 CLI。
-- **交付**：fork/diff UI + `agent-things` CLI。
+- **交付**：fork/diff UI + `agent-things` CLI；[`docs/runs/m8.md`](runs/m8.md)。
+- **实测**：fork@1 精确复制源前缀（1/6 条，事件日志空）；真实写 turn 产出
+  `mechanism` diff `+1/−0`；CLI 以 `xiaomi/mimo-v2.6-flash` 跑通真实 turn 并打印
+  usage/cost；typecheck 4 包 + web build 全绿。
 
 ## 并行开发（Orca worktrees）
 
@@ -128,4 +131,4 @@ orca worktree create --name m2-skills --no-parent --agent <agent> \
 - [x] INT-A 工具型机制接入 server（skills/MCP/subagent；见 `docs/runs/int-a.md`）
 - [x] INT-B1 循环型机制（hooks/permissions + compaction；见 `docs/runs/int-b1.md`）
 - [x] INT-B2 循环型机制（checkpoint + scheduler；见 `docs/runs/int-b2.md`）
-- [ ] M8 会话 UX 与 CLI 副产物
+- [x] M8 会话 UX 与 CLI 副产物（见 `docs/runs/m8.md`）
