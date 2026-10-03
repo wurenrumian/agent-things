@@ -15,6 +15,29 @@ interface UsageTabProps {
   events: AgentEvent[];
 }
 
+/** Cumulative cache hit rate and spend after each call, in call order. */
+interface RunningPoint {
+  rate: number;
+  cost: number;
+}
+
+/**
+ * Running session totals: for call *i*, `rate` is sum(cached)/sum(prompt) over
+ * calls 1..i and `cost` is the accumulated spend so far. This is what makes the
+ * cache economics visible at a glance as the session progresses.
+ */
+function runningSeries(usages: Usage[]): RunningPoint[] {
+  let prompt = 0;
+  let cached = 0;
+  let cost = 0;
+  return usages.map((u) => {
+    prompt += u.prompt_tokens ?? 0;
+    cached += cachedTokens(u);
+    cost += u.cost ?? 0;
+    return { rate: prompt > 0 ? cached / prompt : 0, cost };
+  });
+}
+
 /** Usage after the most recent `turn.start` belongs to the current turn. */
 function splitByTurn(events: AgentEvent[]): { turn: Usage[]; all: Usage[] } {
   const all: Usage[] = [];
@@ -43,6 +66,7 @@ export function UsageTab({ events }: UsageTabProps) {
 
   const turnTotals = usageTotals(turn);
   const sessionTotals = usageTotals(all);
+  const running = runningSeries(all);
 
   return (
     <div className="tab-body">
@@ -51,7 +75,7 @@ export function UsageTab({ events }: UsageTabProps) {
         totals={turnTotals}
         highlightCache
       />
-      <TotalsCard title="Session total" totals={sessionTotals} />
+      <TotalsCard title="Session running" totals={sessionTotals} />
 
       <section className="panel-section">
         <h3 className="panel-title">Calls ({all.length})</h3>
@@ -64,11 +88,22 @@ export function UsageTab({ events }: UsageTabProps) {
               <th className="num">cached</th>
               <th className="num">cache write</th>
               <th className="num">cost</th>
+              <th className="num" title="running sum(cached)/sum(prompt)">
+                run hit
+              </th>
+              <th className="num" title="running session spend">
+                run cost
+              </th>
             </tr>
           </thead>
           <tbody>
             {all.map((usage, index) => (
-              <CallRow key={index} usage={usage} index={index + 1} />
+              <CallRow
+                key={index}
+                usage={usage}
+                index={index + 1}
+                running={running[index] ?? { rate: 0, cost: 0 }}
+              />
             ))}
           </tbody>
           <tfoot>
@@ -78,6 +113,8 @@ export function UsageTab({ events }: UsageTabProps) {
               <td className="num">{formatNumber(sessionTotals.completion)}</td>
               <td className="num">{formatNumber(sessionTotals.cached)}</td>
               <td className="num">{formatNumber(sessionTotals.cacheWrite)}</td>
+              <td className="num">{formatCost(sessionTotals.cost)}</td>
+              <td className="num">{formatPercent(totalsCacheHitRate(sessionTotals))}</td>
               <td className="num">{formatCost(sessionTotals.cost)}</td>
             </tr>
           </tfoot>
@@ -135,7 +172,15 @@ function TotalsCard({
   );
 }
 
-function CallRow({ usage, index }: { usage: Usage; index: number }) {
+function CallRow({
+  usage,
+  index,
+  running,
+}: {
+  usage: Usage;
+  index: number;
+  running: RunningPoint;
+}) {
   const cached = cachedTokens(usage);
   const rate = cacheHitRate(usage);
   return (
@@ -158,6 +203,8 @@ function CallRow({ usage, index }: { usage: Usage; index: number }) {
           : "—"}
       </td>
       <td className="num">{formatCost(usage.cost ?? 0)}</td>
+      <td className="num">{formatPercent(running.rate)}</td>
+      <td className="num">{formatCost(running.cost)}</td>
     </tr>
   );
 }
