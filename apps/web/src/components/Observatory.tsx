@@ -3,9 +3,10 @@ import { ContextTab } from "./ContextTab";
 import { RequestTab } from "./RequestTab";
 import { UsageTab } from "./UsageTab";
 import { TimelineTab } from "./TimelineTab";
+import { DiffTab, collectDiffs } from "./DiffTab";
 import type { AgentEvent, Mechanisms } from "../types";
 
-type TabId = "context" | "request" | "usage" | "timeline";
+type TabId = "context" | "request" | "usage" | "timeline" | "diff";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "context", label: "Context" },
@@ -29,12 +30,17 @@ export function Observatory({ events, mechanisms }: ObservatoryProps) {
   );
   const requestEvent = useMemo(() => lastOfType(events, "request.sent"), [events]);
   const usageCount = events.filter((e) => e.type === "usage").length;
+  const diffCount = useMemo(() => collectDiffs(events).length, [events]);
+
+  // The Diff tab only appears once a write turn has produced a patch, so a
+  // read-only session looks exactly as it did before M8.
+  const tabs = diffCount > 0 ? [...TABS, { id: "diff" as const, label: "Diff" }] : TABS;
 
   return (
     <section className="observatory">
       <MechanismStrip mechanisms={mechanisms} />
       <nav className="tabs" role="tablist" aria-label="Context observatory">
-        {TABS.map(({ id, label }) => (
+        {tabs.map(({ id, label }) => (
           <button
             key={id}
             type="button"
@@ -50,6 +56,9 @@ export function Observatory({ events, mechanisms }: ObservatoryProps) {
             {id === "usage" && usageCount > 0 && (
               <span className="tab-count">{usageCount}</span>
             )}
+            {id === "diff" && diffCount > 0 && (
+              <span className="tab-count">{diffCount}</span>
+            )}
           </button>
         ))}
       </nav>
@@ -59,6 +68,7 @@ export function Observatory({ events, mechanisms }: ObservatoryProps) {
         {tab === "request" && <RequestTab event={requestEvent} />}
         {tab === "usage" && <UsageTab events={events} />}
         {tab === "timeline" && <TimelineTab events={events} />}
+        {tab === "diff" && <DiffTab events={events} />}
       </div>
     </section>
   );

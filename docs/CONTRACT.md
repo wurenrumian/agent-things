@@ -106,6 +106,23 @@ event, but never enter the model's context. Shape:
 is mechanism-defined (`loaded`, `completed`, `called`, `error`, …); `data` is
 optional, mechanism-specific detail. The web Timeline renders them.
 
+**M8 file diff (additive).** The composition root wraps `write_file`/`edit_file`:
+it reads the target (relative to `ctx.cwd`; missing = `""`) **before** and
+**after** the call and, when the bytes changed, appends one `mechanism` event to
+that tool's `ToolResult.events`:
+
+```jsonc
+{ "type": "mechanism", "name": "diff", "phase": "file",
+  "data": { "path": "src/a.ts", "added": 2, "removed": 1, "patch": "@@ -1,3 +1,4 @@…" },
+  "at": 1791032649972 }
+```
+
+`patch` is a hunks-only unified diff from the pure `unifiedDiff()` in
+`@agent/core` (no new dependency). It is observability only and never enters the
+model's context; nothing is emitted when the file is unchanged (or on a failed
+call). The web renders these in a **Diff** tab that appears once at least one
+diff exists.
+
 **M6 hooks/permissions events (additive).** When the loop runs a lifecycle hook
 it emits one `mechanism` event with `name:"hooks"` and `phase` equal to the hook
 point (`userPromptSubmit`, `preToolUse`, `postToolUse`, `preCompact`); `data`

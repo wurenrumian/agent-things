@@ -3,6 +3,7 @@ import {
   ToolRegistry,
   builtinTools,
   messageText,
+  unifiedDiff,
   type AgentConfig,
   type AgentEvent,
   type ChatMessage,
@@ -10,6 +11,7 @@ import {
   type ToolDef,
   type ToolResult,
 } from "@agent/core";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { ServerConfig } from "./config.js";
 import {
@@ -150,6 +152,63 @@ function checkpointed(tool: ToolDef): ToolDef {
 /** Tool names whose files must be checkpointed before mutation. */
 const CHECKPOINTED_TOOLS = new Set(["write_file", "edit_file"]);
 
+/** Tool names whose file mutation should emit a unified-diff event (M8). */
+const DIFFED_TOOLS = new Set(["write_file", "edit_file"]);
+
+/** Read a file's text, treating "missing" as the empty string. */
+async function readTextOrEmpty(abs: string): Promise<string> {
+  try {
+    return await readFile(abs, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+/** Count added/removed lines in a hunks-only unified diff. */
+function countDiffLines(patch: string): { added: number; removed: number } {
+  let added = 0;
+  let removed = 0;
+  for (const line of patch.split("\n")) {
+    if (line.startsWith("+")) added++;
+    else if (line.startsWith("-")) removed++;
+  }
+  return { added, removed };
+}
+
+/**
+ * M8: wrap a file-mutating tool so it diffs its target before/after execution
+ * and appends one `mechanism` diff event when the bytes changed. Observability
+ * only — `patch` never enters the model's context. Emits nothing on no change
+ * (including a failed call, which the tool already reports).
+ */
+function diffed(tool: ToolDef): ToolDef {
+  return {
+    ...tool,
+    async execute(input, ctx) {
+      const rel = typeof input["path"] === "string" ? input["path"] : undefined;
+      if (!rel) return tool.execute(input, ctx);
+
+      const abs = path.resolve(ctx.cwd, rel);
+      const before = await readTextOrEmpty(abs);
+      const result = await tool.execute(input, ctx);
+      if (result.isError) return result;
+
+      const after = await readTextOrEmpty(abs);
+      if (before === after) return result;
+
+      const patch = unifiedDiff(before, after, { context: 3, maxChars: 20_000 });
+      const { added, removed } = countDiffLines(patch);
+      return {
+        ...result,
+        events: [
+          ...(result.events ?? []),
+          mechanismEvent("diff", "file", { path: rel, added, removed, patch }),
+        ],
+      };
+    },
+  };
+}
+
 /** Build a `ToolDef` that proxies one MCP tool over the shared stdio client. */
 function mcpToolDef(
   client: McpStdioClient,
@@ -276,7 +335,10 @@ export async function composeAgent(config: ServerConfig): Promise<ComposedAgent>
 
   const tools = new ToolRegistry();
   for (const tool of builtinTools()) {
-    tools.register(CHECKPOINTED_TOOLS.has(tool.name) ? checkpointed(tool) : tool);
+    let wrapped = tool;
+    if (CHECKPOINTED_TOOLS.has(tool.name)) wrapped = checkpointed(wrapped);
+    if (DIFFED_TOOLS.has(tool.name)) wrapped = diffed(wrapped);
+    tools.register(wrapped);
   }
 
   /* ---------------------------------------------------------------- skills */

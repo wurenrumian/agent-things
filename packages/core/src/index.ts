@@ -1,6 +1,7 @@
 export * from "./types.js";
 export * from "./events.js";
 export * from "./content.js";
+export * from "./diff.js";
 export * from "./permissions.js";
 export * from "./context/system-prompt.js";
 export * from "./provider/openrouter.js";
