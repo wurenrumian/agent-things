@@ -87,7 +87,22 @@ export interface ServerConfig {
   mcpServers: McpServerConfig[];
   /** Step ceiling handed to each nested subagent (`task` tool). */
   subagentMaxSteps: number;
+  /** Absolute path to a hooks JSON file (`HOOKS_FILE`); unset = hooks off. */
+  hooksFile?: string;
+  /** Absolute path to a policy JSON file (`POLICY_FILE`); unset = policy off. */
+  policyFile?: string;
+  /** Auto-compaction trigger in estimated tokens; `0` = compaction off. */
+  compactThresholdTokens: number;
+  /** Messages kept verbatim at the tail of a compaction (default `8`). */
+  compactKeepRecent: number;
+  /** Messages kept verbatim before the summarized span (default `1`). */
+  compactKeepLeading: number;
+  /** Where the summary lands (`COMPACT_PLACEMENT`, default `spliced`). */
+  compactPlacement: CompactPlacement;
 }
+
+/** Summary placement, mirroring the compaction mechanism's union. */
+export type CompactPlacement = "spliced" | "leading";
 
 function parsePermissionMode(raw: string | undefined): PermissionMode {
   if (raw === undefined || raw === "") return "yolo";
@@ -104,6 +119,30 @@ function parsePositiveInt(raw: string | undefined, fallback: number, key: string
     throw new Error(`Invalid ${key} "${raw}" (expected a positive integer).`);
   }
   return value;
+}
+
+/** Like {@link parsePositiveInt} but allows `0` (used for "off" thresholds). */
+function parseNonNegativeInt(raw: string | undefined, fallback: number, key: string): number {
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`Invalid ${key} "${raw}" (expected a non-negative integer).`);
+  }
+  return value;
+}
+
+/** An optional file path, resolved against the repo root when relative. */
+function resolveOptionalPath(root: string, raw: string | undefined): string | undefined {
+  const text = raw?.trim();
+  if (!text) return undefined;
+  return path.isAbsolute(text) ? text : path.resolve(root, text);
+}
+
+function parsePlacement(raw: string | undefined): CompactPlacement {
+  const text = raw?.trim();
+  if (!text) return "spliced";
+  if (text === "spliced" || text === "leading") return text;
+  throw new Error(`Invalid COMPACT_PLACEMENT "${raw}" (expected spliced | leading).`);
 }
 
 /**
@@ -214,5 +253,23 @@ export function loadConfig(): ServerConfig {
       12,
       "SUBAGENT_MAX_STEPS",
     ),
+    hooksFile: resolveOptionalPath(repoRoot, process.env["HOOKS_FILE"]),
+    policyFile: resolveOptionalPath(repoRoot, process.env["POLICY_FILE"]),
+    compactThresholdTokens: parseNonNegativeInt(
+      process.env["COMPACT_THRESHOLD_TOKENS"],
+      0,
+      "COMPACT_THRESHOLD_TOKENS",
+    ),
+    compactKeepRecent: parseNonNegativeInt(
+      process.env["COMPACT_KEEP_RECENT"],
+      8,
+      "COMPACT_KEEP_RECENT",
+    ),
+    compactKeepLeading: parseNonNegativeInt(
+      process.env["COMPACT_KEEP_LEADING"],
+      1,
+      "COMPACT_KEEP_LEADING",
+    ),
+    compactPlacement: parsePlacement(process.env["COMPACT_PLACEMENT"]),
   };
 }

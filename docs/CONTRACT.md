@@ -26,9 +26,17 @@ All responses JSON unless noted. Errors: `{ "error": string }` with status.
 | POST | `/api/sessions` | `{ title?: string }` | `SessionMeta` |
 | GET | `/api/sessions/:id` | — | `{ session: SessionMeta, messages: ChatMessage[] }` |
 | GET | `/api/sessions/:id/events` | — | `{ seq: number, event: AgentEvent }[]` |
+| POST | `/api/sessions/:id/compact` | — | `{ before, after, summarized, keptRecent, keptLeading, placement }` |
 | POST | `/api/sessions/:id/messages` | `{ input: string }` | `text/event-stream` |
 
 `SessionMeta = { id, title, cwd, createdAt, updatedAt, messageCount }`.
+
+`POST /api/sessions/:id/compact` (M3, additive) forces one compaction of the
+live agent's history now. `before`/`after` are coarse token estimates, and it
+returns `409 { error }` when compaction is not configured
+(`COMPACT_THRESHOLD_TOKENS` unset/`0`). A `mechanism` event
+(`name:"compaction"`, `phase:"compacted"`, `data.via:"api"`) is appended to the
+session log and the live messages are persisted.
 
 ### SSE stream for `POST /messages`
 
@@ -55,6 +63,29 @@ event, but never enter the model's context. Shape:
 is mechanism-defined (`loaded`, `completed`, `called`, `error`, …); `data` is
 optional, mechanism-specific detail. The web Timeline renders them.
 
+**M6 hooks/permissions events (additive).** When the loop runs a lifecycle hook
+it emits one `mechanism` event with `name:"hooks"` and `phase` equal to the hook
+point (`userPromptSubmit`, `preToolUse`, `postToolUse`, `preCompact`); `data`
+carries `{ records }` (the `HookOutcomeRecord[]` audit list), plus `mutated` and
+the effective `input` for `preToolUse`. The **tool verdict** still rides the
+existing `permission.decision` event, whose `decision` may now be `"ask"`:
+
+```jsonc
+{ "type": "permission.decision", "toolCallId": "call_1", "name": "write_file",
+  "decision": "ask", "reason": "writes mutate the workspace", "at": 1791032649972 }
+```
+
+Execution rule (unchanged when unconfigured): `deny` blocks; `ask` proceeds
+**only** when `PERMISSION_MODE=yolo`, otherwise it is blocked with a
+"pending approval (non-interactive)" tool result; `allow` proceeds. The event
+always records the *true* verdict, independent of whether the call proceeds.
+
+**M3 compaction event (additive).** When auto-compaction fires at the top of a
+step it emits `{ name:"compaction", phase:"compacted", data:{ before, after,
+summarized, keptRecent, keptLeading, placement } }` (plus a `hooks`/`preCompact`
+event when hooks are configured). The `preToolUse`/`postToolUse` events follow
+`tool.call`/`tool.result` respectively.
+
 ## Config (server, from env)
 
 Read from repo-root `.env` (do not add a dotenv dependency; write a tiny loader).
@@ -73,6 +104,20 @@ Read from repo-root `.env` (do not add a dotenv dependency; write a tiny loader)
   Each server is connected over stdio at startup; one that fails to connect is
   logged and skipped, never fatal.
 - `SUBAGENT_MAX_STEPS` (step ceiling for each nested subagent; default `12`)
+- `HOOKS_FILE` (path to a hooks JSON file — see
+  `packages/core/src/mechanisms/hooks/fixtures/hooks.json`; unset = no hooks).
+- `POLICY_FILE` (path to an ordered rules JSON file — see
+  `.../fixtures/rules.json`; unset = no rule policy). When either is set, the
+  server builds a `gate` that calls `decide(policy, hooks, req)` for every tool
+  call; when both are unset the loop uses the coarse `PERMISSION_MODE` gate and
+  behavior is exactly as before.
+- `COMPACT_THRESHOLD_TOKENS` (estimated-token threshold for auto-compaction;
+  `0`/unset = **off**). When `> 0`, the loop compacts at the top of a step
+  whenever the live history estimate exceeds it.
+- `COMPACT_KEEP_RECENT` (messages kept verbatim at the tail; default `8`).
+- `COMPACT_KEEP_LEADING` (messages kept verbatim before the summarized span;
+  default `1`).
+- `COMPACT_PLACEMENT` (`spliced` | `leading`; default `spliced`).
 
 ## Web app (Vite + React + TS, dev port 5173)
 

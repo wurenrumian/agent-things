@@ -15,7 +15,12 @@ export interface ContextBreakdown {
   sections: ContextSection[];
 }
 
-export type PermissionDecision = "allow" | "deny";
+/**
+ * A tool-gate verdict. `ask` means "a human/UI must resolve this"; the loop
+ * echoes the *true* verdict on `permission.decision` even when it proceeds
+ * optimistically in `yolo` mode.
+ */
+export type PermissionDecision = "allow" | "deny" | "ask";
 
 export type TurnEndReason = "stop" | "max_steps" | "error" | "aborted";
 
