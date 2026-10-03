@@ -162,6 +162,17 @@ export type AgentEvent =
       data?: unknown;
       at: number;
     }
+  | {
+      type: "task.settled";
+      taskId: string;
+      name: string;
+      kind: "one-shot" | "interval";
+      status: "succeeded" | "failed" | "cancelled";
+      result?: unknown;
+      error?: string;
+      run: number;
+      at: number;
+    }
   | { type: "turn.end"; reason: TurnEndReason; error?: string; at: number };
 
 export type AgentEventType = AgentEvent["type"];

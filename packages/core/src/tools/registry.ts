@@ -1,4 +1,5 @@
 import type { AgentEvent } from "../events.js";
+import type { CheckpointStore } from "../mechanisms/checkpoint/index.js";
 import type { JSONSchema, ToolSchema } from "../types.js";
 
 /**
@@ -9,6 +10,18 @@ import type { JSONSchema, ToolSchema } from "../types.js";
 export interface ToolContext {
   cwd: string;
   signal?: AbortSignal;
+  /**
+   * The loop turn executing this tool, when known. The M6 checkpoint wrapper
+   * snapshots files into this turn id so they can be restored later.
+   */
+  turnId?: string;
+  /** The session the turn belongs to, when known. */
+  sessionId?: string;
+  /**
+   * Per-turn file snapshot store, when the composition root wired one. Absent
+   * ⇒ checkpointing is inert (the default for a bare kernel).
+   */
+  checkpoints?: CheckpointStore;
 }
 
 export interface ToolResult {

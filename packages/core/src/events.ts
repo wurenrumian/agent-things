@@ -85,4 +85,20 @@ export type AgentEvent =
       data?: unknown;
       at: number;
     }
+  /**
+   * M7 scheduler settlement. Emitted by the server when a scheduled task
+   * finishes (outside any turn); shaped inline so `events.ts` never imports a
+   * mechanism type. `kind` is limited to the scheduler's scheduled kinds.
+   */
+  | {
+      type: "task.settled";
+      taskId: string;
+      name: string;
+      kind: "one-shot" | "interval";
+      status: "succeeded" | "failed" | "cancelled";
+      result?: unknown;
+      error?: string;
+      run: number;
+      at: number;
+    }
   | { type: "turn.end"; reason: TurnEndReason; error?: string; at: number };

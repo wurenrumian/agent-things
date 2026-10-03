@@ -99,6 +99,10 @@ export interface ServerConfig {
   compactKeepLeading: number;
   /** Where the summary lands (`COMPACT_PLACEMENT`, default `spliced`). */
   compactPlacement: CompactPlacement;
+  /** Absolute directory for M6 checkpoint snapshots (`CHECKPOINT_DIR`). */
+  checkpointDir: string;
+  /** Whether the M7 scheduler is enabled (`SCHEDULER_ENABLED`, default `true`). */
+  schedulerEnabled: boolean;
 }
 
 /** Summary placement, mirroring the compaction mechanism's union. */
@@ -143,6 +147,15 @@ function parsePlacement(raw: string | undefined): CompactPlacement {
   if (!text) return "spliced";
   if (text === "spliced" || text === "leading") return text;
   throw new Error(`Invalid COMPACT_PLACEMENT "${raw}" (expected spliced | leading).`);
+}
+
+/** Parse a boolean env value; absent/empty falls back to `fallback`. */
+function parseBool(raw: string | undefined, fallback: boolean, key: string): boolean {
+  const text = raw?.trim().toLowerCase();
+  if (!text) return fallback;
+  if (text === "1" || text === "true" || text === "yes" || text === "on") return true;
+  if (text === "0" || text === "false" || text === "no" || text === "off") return false;
+  throw new Error(`Invalid ${key} "${raw}" (expected true | false).`);
 }
 
 /**
@@ -271,5 +284,13 @@ export function loadConfig(): ServerConfig {
       "COMPACT_KEEP_LEADING",
     ),
     compactPlacement: parsePlacement(process.env["COMPACT_PLACEMENT"]),
+    checkpointDir: process.env["CHECKPOINT_DIR"]
+      ? path.resolve(repoRoot, process.env["CHECKPOINT_DIR"])
+      : path.join(dataDir, "checkpoints"),
+    schedulerEnabled: parseBool(
+      process.env["SCHEDULER_ENABLED"],
+      true,
+      "SCHEDULER_ENABLED",
+    ),
   };
 }
