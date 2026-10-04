@@ -157,3 +157,18 @@ server/web/契约的接线由 INT-C 单 worker 波次完成（env
 关于 orchestrator 的取舍：worker 是**本内核的 `Agent`**，编排走结构化事件流，
 所以**不引入终端模拟器**；PTY 只在需要托管**外部黑盒 TTY agent**（claude-code /
 codex / opencode）时，作为一个独立 transport adapter 再引入。
+
+## 学习辅助（L 系列）
+
+M9–M12 完成后，机制侧已够用；接下来服务于 SPEC §3 的三条软标准
+（可测量 / 可复现 / 可讲清），把项目从"可观测"推进到"可交互地教"。
+
+| 编号 | 学件 | 一句话 | 状态 |
+|---|---|---|---|
+| L1 | cache forensics | 给出两次请求的**首个分歧块**并归因（system / tools / message i），把"谁破坏了缓存"变可见 | 进行中 |
+| L2 | myths + 三节课路径 | `docs/MYTHS.md`（常识 vs 实测，带真实数字）+ `docs/LEARNING.md`（按三节课排序的学习路径） | 进行中 |
+
+后续候选：Labs（实验即按钮，实时 ledger）、练习模式（骨架 + 用实验当判分器）。
+
+L1（代码，动 `apps/web` + `packages/core`）与 L2（纯文档，只新建两个文件）
+互不冲突，可并行。
