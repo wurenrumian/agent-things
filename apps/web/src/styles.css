@@ -1634,3 +1634,72 @@ button {
   background: var(--red-soft);
 }
 
+/* ---- INT-L learn tab ---- */
+
+.learn-intro {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.learn-card {
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  padding: 10px 12px;
+}
+
+.learn-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.learn-card-titles {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.learn-card-title {
+  font-weight: 600;
+}
+
+.learn-card-path {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--bg-elev-2);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.learn-card-blurb {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.learn-doc {
+  margin: 4px 0 0;
+  padding: 10px;
+  max-height: 360px;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+}
+

@@ -107,6 +107,21 @@ Allow/Deny 控件。新自包含 `mechanisms/commands/`（`CommandRegistry` + `p
 讲解 `docs/mechanisms/{approval,commands}.md`。真实模型实验：deny/allow 事件序列与
 250ms 回调停顿（Δ≈263ms）；服务器 allow/deny/timeout（~1513ms）全通过。**未新增依赖**。
 
+**learn wave（L1/L2/L3）+ INT-L 收尾** — 教学波次，已全部合入 `master`：
+- **L1 cache forensics**（`packages/core/src/context-diff.ts` + web **Forensics tab**）：
+  给连续两次请求指出**首个分歧块**并归因（system / tools / messages）；零 API 自检 6/6 PASS。
+  证据 `docs/runs/l1-cache-forensics.md`。
+- **L2 文档**：`docs/MYTHS.md`（常识 vs 实测，数字逐字来自 run 文档）+
+  `docs/LEARNING.md`（三节课路径）。
+- **L3 labs**（web **Labs tab** + server 白名单/runner）：12 个实验一键运行、SSE 实时账本。
+  证据 `docs/runs/l3-labs.md`、讲解 `docs/labs.md`。
+- **INT-L（本次收尾）**：README 新增「学习路径 / 学习工具」；web 新增 **Learn** 面板
+  （应用内读 LEARNING/MYTHS、一键跳 Labs）；ROADMAP 标记 L1/L2/L3 完成；
+  MECHANISMS §7 顶部指向 MYTHS。未改 `packages/server`，未新增依赖。
+
+HEAD（学习波次收尾前）：`6a0c0a8`（`merge: L3 labs`）；INT-L 提交在其上落定，
+**learn wave 到此 settled**。后续候选：练习模式（骨架 + 用实验当判分器）。
+
 ## 6. 状态：**全部里程碑完成** 🎉（已打 tag `v1`）
 
 M0–M8 与 INT-A/B1/B2 全部合入 `master`，`pnpm typecheck`（core/server/web/cli）+ web build 全绿。
