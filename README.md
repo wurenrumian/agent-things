@@ -13,6 +13,21 @@ compaction / MCP / session / 权限等机制）。重点不是"再造一个 agen
 > web 可构建。进度见 [`docs/ROADMAP.md`](docs/ROADMAP.md)，协调者交接见
 > [`docs/STATE.md`](docs/STATE.md)，M12 证据见 [`docs/runs/m12.md`](docs/runs/m12.md)。
 
+## 学习路径 / 学习工具
+
+按"三节课"的顺序学时，从这三份仓库内的文档进（数字都逐字来自 `docs/runs/*.md`，可复现）：
+
+| 入口 | 内容 |
+|---|---|
+| [`docs/LEARNING.md`](docs/LEARNING.md) | **三节课学习路径**：每章统一为"心智模型 → 实现文件 → 实验脚本 → 实测数字 → 钩子问题" |
+| [`docs/MYTHS.md`](docs/MYTHS.md) | **常识 vs 实测**：逐条用真实 `usage` 数据推翻或修正"想当然" |
+| [`docs/labs.md`](docs/labs.md) | **Labs 实验台**：把 12 个实验做成观测台里一键运行、实时出账本 |
+
+观测台（`apps/web`）里另有两个**只读**教学工具：
+
+- **Forensics** tab —「谁破坏了缓存」：对连续两次请求指出**首个分歧块**（system / tools / messages）并归因；
+- **Labs** tab —「实验即按钮」：白名单实验目录 + 预算确认，点一下就在页面里流式跑完。
+
 ## 文档
 
 | 文档 | 内容 |

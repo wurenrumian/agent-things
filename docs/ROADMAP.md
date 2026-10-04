@@ -167,8 +167,8 @@ M9–M12 完成后，机制侧已够用；接下来服务于 SPEC §3 的三条�
 |---|---|---|---|
 | L1 | cache forensics | 给出两次请求的**首个分歧块**并归因（system / tools / message i），把"谁破坏了缓存"变可见 | ✅ |
 | L2 | myths + 三节课路径 | `docs/MYTHS.md`（常识 vs 实测，带真实数字）+ `docs/LEARNING.md`（按三节课排序的学习路径） | ✅ |
-| L3 | labs 实验台 | 白名单 + 子进程 + SSE，把 12 个实验做成 web 里一键运行、实时出 ledger | 进行中 |
-| INT-L | discoverability | 把 LEARNING / MYTHS / Labs 链进 README + web 导航，收尾 | 待 L3 |
+| L3 | labs 实验台 | 白名单 + 子进程 + SSE，把 12 个实验做成 web 里一键运行、实时出 ledger | ✅ |
+| INT-L | discoverability | 把 LEARNING / MYTHS / Labs 链进 README + web 导航，收尾 | ✅ |
 
 后续候选：练习模式（骨架 + 用实验当判分器）。
 

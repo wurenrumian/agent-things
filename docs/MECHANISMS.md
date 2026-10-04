@@ -147,6 +147,8 @@ cache creation 的 0.76%"**；压缩后，attachment builders 会**重新宣告�
 
 ## 7. 实测结论（回填）
 
+> 本节结论的"**常识 vs 实测**"速览版见 [`docs/MYTHS.md`](MYTHS.md)（每条都指向对应 run 文档）。
+
 ### M1 缓存与 token 经济 — 详见 [`runs/m1-cache.md`](runs/m1-cache.md)
 
 模型：`xiaomi/mimo-v2.6-flash`（走自动前缀缓存，`cache_write_tokens` 恒为 0）。
