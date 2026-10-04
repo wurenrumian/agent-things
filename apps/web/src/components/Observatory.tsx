@@ -108,6 +108,33 @@ function MechanismStrip({ mechanisms }: { mechanisms: Mechanisms | null }) {
         <span className="mechanism-label">tools</span>
         <span className="mechanism-value">{mechanisms.tools.length}</span>
       </span>
+      <span
+        className="mechanism-item"
+        title={mechanisms.memory?.dir ?? "MEMORY_ENABLED unset"}
+      >
+        <span className="mechanism-label">memory</span>
+        <span className="mechanism-value">
+          {mechanisms.memory?.enabled
+            ? `${mechanisms.memory.count ?? 0} entries${
+                mechanisms.memory.systemInject ? " · sys" : ""
+              }`
+            : "off"}
+        </span>
+      </span>
+      <span className="mechanism-item">
+        <span className="mechanism-label">workers</span>
+        <span className="mechanism-value">
+          {mechanisms.orchestrator?.enabled
+            ? `${mechanisms.orchestrator.workers ?? 0}`
+            : "off"}
+        </span>
+      </span>
+      <span className="mechanism-item">
+        <span className="mechanism-label">tool search</span>
+        <span className="mechanism-value">
+          {mechanisms.toolSearch?.enabled ? "on" : "off"}
+        </span>
+      </span>
     </div>
   );
 }

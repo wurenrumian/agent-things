@@ -182,6 +182,17 @@ export interface Mechanisms {
   skills: string[];
   mcpServers: string[];
   tools: string[];
+  /** M9 status (additive): memory on/off, store dir and live entry count. */
+  memory?: {
+    enabled: boolean;
+    dir?: string;
+    count?: number;
+    systemInject?: boolean;
+  };
+  /** M10 status (additive): orchestrator on/off and tracked worker count. */
+  orchestrator?: { enabled: boolean; workers?: number };
+  /** M11 status (additive): lazy tool facade on/off. */
+  toolSearch?: { enabled: boolean };
 }
 
 export type ContextEvent = Extract<AgentEvent, { type: "context.compiled" }>;

@@ -9,8 +9,9 @@ import {
   type SessionMeta,
 } from "@agent/core";
 import { loadConfig, type ServerConfig } from "./config.js";
-import { composeAgent } from "./compose.js";
+import { composeAgent, type ComposedAgent } from "./compose.js";
 import type { CheckpointStore } from "../../core/src/mechanisms/checkpoint/index.js";
+import type { Supervisor } from "../../core/src/mechanisms/orchestrator/index.js";
 import {
   reinjectTaskOutcome,
   taskOutcomeToEvent,
@@ -37,9 +38,15 @@ interface Runtime {
   checkpoints: CheckpointStore;
   /** M7 background/scheduled tasks (absent when `SCHEDULER_ENABLED=false`). */
   scheduler?: Scheduler;
+  /** M9 memory read-out (absent when `MEMORY_ENABLED=false`). */
+  memories?: ComposedAgent["memories"];
+  /** M10 orchestrator supervisor (absent when `ORCHESTRATOR_ENABLED=false`). */
+  supervisor?: Supervisor;
   /** Mechanism inventory for `GET /api/mechanisms`. */
   skills: string[];
   mcpServers: string[];
+  /** Whether the M11 lazy tool facade is active (`TOOL_SEARCH_ENABLED`). */
+  toolSearchEnabled: boolean;
   /** Tear down long-lived mechanism resources (MCP stdio children). */
   close: () => void;
 }
@@ -56,8 +63,11 @@ async function createRuntime(config: ServerConfig): Promise<Runtime> {
     agentConfig: composed.agentConfig,
     checkpoints: composed.checkpoints,
     scheduler: composed.scheduler,
+    memories: composed.memories,
+    supervisor: composed.supervisor,
     skills: composed.skills,
     mcpServers: composed.mcpServers,
+    toolSearchEnabled: config.toolSearchEnabled,
     close: composed.close,
   };
 
@@ -140,8 +150,56 @@ function buildApp(rt: Runtime): Hono {
       skills: rt.skills,
       mcpServers: rt.mcpServers,
       tools: rt.agentConfig.tools.list().map((t) => t.name),
+      memory: rt.memories
+        ? {
+            enabled: true,
+            dir: rt.memories.dir,
+            count: rt.memories.count,
+            systemInject: rt.memories.systemInject,
+          }
+        : { enabled: false },
+      orchestrator: {
+        enabled: rt.supervisor !== undefined,
+        workers: rt.supervisor?.registry.size() ?? 0,
+      },
+      toolSearch: { enabled: rt.toolSearchEnabled },
     }),
   );
+
+  /**
+   * M9: the live memory read-out. `{ enabled:false }` when `MEMORY_ENABLED` is
+   * unset, so the endpoint is inert by default. `entries` is a live copy taken
+   * from the store, so an entry saved by the `memory` tool during a turn shows
+   * up immediately.
+   */
+  app.get("/api/memories", (c) => {
+    if (!rt.memories) return c.json({ enabled: false });
+    return c.json({
+      enabled: true,
+      dir: rt.memories.dir,
+      count: rt.memories.count,
+      systemInject: rt.memories.systemInject,
+      entries: rt.memories.entries,
+    });
+  });
+
+  /**
+   * M10: the orchestrator supervisor snapshot. `{ enabled:false }` when
+   * `ORCHESTRATOR_ENABLED` is unset. `workers` is the registry's transition
+   * log; `pending` are unacked mailbox messages not consumed by `wait_for`.
+   */
+  app.get("/api/workers", (c) => {
+    const supervisor = rt.supervisor;
+    if (!supervisor) return c.json({ enabled: false });
+    return c.json({
+      enabled: true,
+      coordinatorId: supervisor.coordinatorId,
+      workers: supervisor.registry.snapshot(),
+      reports: supervisor.reports(),
+      usage: supervisor.usage(),
+      pending: supervisor.mailbox.pending(),
+    });
+  });
 
   app.get("/api/sessions", (c) => c.json(rt.store.listSessions()));
 
