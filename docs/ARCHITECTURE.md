@@ -10,15 +10,22 @@ agent-things/
 │  │     ├─ types.ts              # 线格式类型（贴近 OpenAI chat-completions）
 │  │     ├─ events.ts             # AgentEvent 词汇表（全局单一事件语言）
 │  │     ├─ content.ts            # content 组装 + 缓存断点标记 + 粗估 token
-│  │     ├─ permissions.ts        # L7 闸门缝（M0 非交互）
+│  │     ├─ diff.ts               # unifiedDiff（M8）
+│  │     ├─ context-diff.ts       # 两次请求的首个分歧块（L1 Forensics）
+│  │     ├─ permissions.ts        # L7 粗粒度闸门缝（完整策略见 mechanisms/hooks）
 │  │     ├─ context/system-prompt.ts  # L1 系统提示装配 + AGENTS.md 发现
 │  │     ├─ provider/openrouter.ts    # L2 手写 OpenRouter 流式客户端
 │  │     ├─ tools/{registry,builtin}.ts # L4 工具注册表 + 内置工具
+│  │     ├─ mechanisms/<name>/    # 每个机制自包含：skills、mcp、subagent、
+│  │     │                         #   compaction、hooks、checkpoint、scheduler、
+│  │     │                         #   memory、orchestrator、tool-search、commands
 │  │     ├─ agent/loop.ts         # L0 agent 循环（async generator）
 │  │     └─ store/session.ts      # L6 会话 + 事件日志（node:sqlite）
-│  └─ server/     # HTTP + SSE，把 core 包起来
+│  ├─ server/     # HTTP + SSE + Labs runner，把 core 包成服务
+│  └─ cli/        # agent-things 命令行（同一内核的第二个消费者）
 └─ apps/
-   └─ web/        # 上下文观测台（Vite + React）
+   └─ web/        # 上下文观测台（Vite + React）：Context / Request / Usage /
+                  #   Timeline / Diff / Forensics / Labs / Learn
 ```
 
 依赖方向：`core` ← `server` ← `web`（web 只通过 HTTP 与 server 通信）。
@@ -31,12 +38,12 @@ agent-things/
 | L0 循环内核 | `agent/loop.ts` | tool loop、状态机、停止条件 |
 | L1 上下文装配 | `context/system-prompt.ts` | system 分段、环境注入、AGENTS.md |
 | L2 缓存与 token 经济 | `provider/openrouter.ts`、`content.ts` | 缓存断点、usage、sticky routing |
-| L3 上下文回收 | *（M2/M3 待建）* | 压缩、tool-result clearing |
-| L4 能力扩展 | `tools/`、*（M2/M4 待建）* | 工具、skill、MCP |
-| L5 委派与并发 | *（M5 待建）* | subagent、background、scheduled |
-| L6 会话与状态 | `store/session.ts` | 持久化、事件日志、fork |
-| L7 安全权限 | `permissions.ts` | 审批、沙箱缝 |
-| L8 交互外壳 | `server/`、`apps/web/` | 事件流、观测面板 |
+| L3 上下文回收 | `mechanisms/compaction/` | 压缩、tool-result clearing |
+| L4 能力扩展 | `tools/`、`mechanisms/{skills,mcp,tool-search,commands}/` | 工具、skill、MCP、惰性工具暴露、斜杠命令 |
+| L5 委派与并发 | `mechanisms/{subagent,scheduler,orchestrator}/` | subagent、background/scheduled、多 worker supervisor |
+| L6 会话与状态 | `store/session.ts`、`mechanisms/checkpoint/` | 持久化、事件日志、fork、代码回滚 |
+| L7 安全权限 | `permissions.ts`、`mechanisms/hooks/` | 裁决、有序策略、hooks、交互审批（M12） |
+| L8 交互外壳 | `server/`、`apps/web/` | 事件流、观测面板、Forensics / Labs / Learn |
 
 ## 3. 核心接口
 
@@ -51,10 +58,13 @@ context.compiled 本轮实际要发送的完整消息数组 + 组成统计
 request.sent     真正发出（之前）的请求体
 text.delta       流式文本增量
 assistant.message 组装完成的 assistant 消息（含 tool_calls）
-permission.decision 每个工具调用的裁决
+permission.decision 每个工具调用的裁决（allow | deny | ask）
 tool.call        工具调用开始
 tool.result      工具结果 + 耗时 + 是否错误
 usage            provider 返回的 token / 缓存用量
+mechanism        机制进度（name + phase + data；由 ToolResult.events 中继）
+approval.requested / approval.resolved  ask 的交互审批（M12）
+task.settled     定时任务结算（M7，turn 之外）
 turn.end         结束（stop | max_steps | error | aborted）
 ```
 
@@ -118,7 +128,8 @@ class OpenRouterClient {
 web ⇄ HTTP/SSE ⇄ server ⇄ Agent.run() ⇄ core
                     │
                     ├─ Store (events, messages) → data/agent.db
-                    └─ OpenRouterClient → openrouter.ai
+                    ├─ OpenRouterClient → openrouter.ai
+                    └─ Labs runner → spawn(packages/server/scripts/*) → SSE（L3）
 ```
 
 `POST /api/sessions/:id/messages` 返回 `text/event-stream`，每个 `AgentEvent`

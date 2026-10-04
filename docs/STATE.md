@@ -16,7 +16,7 @@ pnpm monorepo（`packages/core` 内核 + `packages/server` HTTP/SSE + `apps/web`
 | `docs/SPEC.md` | 目标/非目标/决策/原则 |
 | `docs/ARCHITECTURE.md` | 分层、接口、数据流 |
 | `docs/MECHANISMS.md` | 机制地图 + **§7 实测结论** |
-| `docs/ROADMAP.md` | M0–M8 里程碑与状态 |
+| `docs/ROADMAP.md` | M0–M12 里程碑、学习辅助（L 系列）与状态 |
 | `docs/CONTRACT.md` | 冻结的 HTTP/事件契约 |
 | `docs/runs/*.md` | 每个里程碑的**实测数据** |
 | `docs/mechanisms/*.md` | 每个机制的讲解 |
@@ -25,10 +25,11 @@ pnpm monorepo（`packages/core` 内核 + `packages/server` HTTP/SSE + `apps/web`
 ## 3. Git 状态
 
 - 主 worktree：`D:/Project/agent-things`，分支唯一为 **`master`**。
-- 所有历史 worker 分支已删除；当前只有 **`master`**，已并入 INT-A/B1/B2 与 M8（最新 merge `aee94ec`）。
+- 所有历史 worker 分支已删除；当前只有 **`master`**。最新提交为学习波次收尾
+  （L1/L2/L3 + INT-L，merge 见 §5），worktree 列表只剩主树。
 - 模型：`xiaomi/mimo-v2.6-flash`；`.env` 在仓库根，**gitignored**，含 `OPENROUTER_API_KEY`。
 - TypeScript **7.0.2**（native），四份 manifest 均 `^7.0.2`；`pnpm typecheck` 全绿。
-- 后台还跑着 `pnpm dev`（server :8787 / web :5173）——shell id `sh_101a314e2001DHKUbQx0gQmZDv`。
+- **没有**常驻 `pnpm dev` 在跑；验证时用独立 `PORT` + 独立 `DATA_DIR`。
 
 ## 4. 已完成里程碑（均在 master）
 
@@ -122,28 +123,31 @@ Allow/Deny 控件。新自包含 `mechanisms/commands/`（`CommandRegistry` + `p
 HEAD（学习波次收尾前）：`6a0c0a8`（`merge: L3 labs`）；INT-L 提交在其上落定，
 **learn wave 到此 settled**。后续候选：练习模式（骨架 + 用实验当判分器）。
 
-## 6. 状态：**全部里程碑完成** 🎉（已打 tag `v1`）
+learning wave 已全部合入 `master`；worktree 列表只剩主树，分支只剩 `master`。
 
-M0–M8 与 INT-A/B1/B2 全部合入 `master`，`pnpm typecheck`（core/server/web/cli）+ web build 全绿。
-`README.md` 已更新到 v1。
+## 6. 状态：**全部里程碑 + 学习波次完成** 🎉
 
-**v2 进展**：M9/M10/M11 三个机制已合入 `master`；**INT-C 已把三者接进 server + web
-并回填文档**（见 §5 与 `docs/runs/int-c.md`）。`MECHANISMS.md §7` 已补 M9/M10/M11 实测。
-**M12 也已完成**（见 §5）：交互式审批 + 斜杠命令，`docs/runs/m12.md` 与两篇机制文档
-已就位，typecheck / web build / 真实模型实验 / 服务器 E2E 全绿。v2 四个里程碑（M9–M12）
-至此齐活。
+M0–M12 与 INT-A/B1/B2/INT-C、L1/L2/L3、INT-L 全部合入 `master`，
+`pnpm typecheck`（core/server/web/cli）+ web build 全绿。
+
+- **v1**：M0–M8，已打 tag `v1`。
+- **v2**：M9–M12 已合入并整合（§5）。
+- **learn wave**：L1 forensics / L2 文档 / L3 labs / INT-L 收尾（§5），
+  服务于 SPEC §3 的"可测量 / 可复现 / 可讲清"。
 
 可选后续（非里程碑）：
-1. 把 M2–M7 的机制在 web 观测台做成**专面板**（目前主要是 Timeline + Mechanisms 条带 + Diff）。
-2. 空壳目录：`m0-server/ m0-web/ m1-cache/ m2-skills/ m3-compaction/ m4-mcp/ m5-subagent/
-   m6-permissions/ m7-scheduler/ m8-session-ux-cli/ int-a-tools/ int-b1-loop/ int-b2-checkpoint-scheduler/`
-   都是**空的**、无分支、无 git worktree 注册、已被 `.gitignore` 忽略。它们被**常驻的
-   Orca/opencode 宿主进程**（repo watcher）持句柄，**在会话内删不掉**（`rmdir` 报
-   "being used by another process"）。无害。**关闭 Orca 后**运行：
+1. **练习模式**（骨架 + 用实验当判分器）——最贴近"可复现"的下一步。
+2. 把 M2–M7 的机制在 web 观测台做成**专面板**。
+3. PTY / 外部黑盒 TTY agent 适配器（仅在需要托管 claude-code/codex 时）。
+4. 空壳 worktree 目录：`m0-server/ … m12/`、`int-a…/l1…` 等都是**空的**、
+   无分支、无 git worktree 注册、已被 `.gitignore` 忽略（`/m[0-9]*-*/`、
+   `/int-*/`、`/l[0-9]*-*/`）。它们被**常驻的 Orca/opencode 宿主进程**（repo
+   watcher）持句柄，**在会话内删不掉**（`rmdir` 报 "being used by another
+   process"）。无害。**关闭 Orca 后**运行：
 
    ```powershell
    Get-ChildItem D:\Project\agent-things -Directory |
-     Where-Object { $_.Name -match '^(m[0-9]+-.+|int-.+)$' } |
+     Where-Object { $_.Name -match '^(m[0-9]+-.+|int-.+|l[0-9]+-.+)$' } |
      Remove-Item -Recurse -Force
    ```
 
@@ -151,8 +155,8 @@ M0–M8 与 INT-A/B1/B2 全部合入 `master`，`pnpm typecheck`（core/server/w
 
 - 派发：`orca orchestration run-create --objective "..." --json`；然后
   `orca orchestration worker-start --spec "<自包含> --worktree new-top-level --agent opencode --name <n> --repo id:c9d5a4d1-e32e-45f8-b5f3-ac7e710bd3de --base-branch master --json`。
-- 等待：`check --run <run> --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json`
-  （**会打 `_keepalive` 心跳**，用 `Select-String -NotMatch '_keepalive'` 过滤）。
+- 等待：`check --run <run> --wait --types "worker_done,escalation,question" --timeout-ms 240000 --json`
+  （**会打 `_keepalive` 心跳**，用 `Select-String -NotMatch '_keepalive'` 过滤；本轮实践用 4 分钟）。
 - 处理消息：heartbeat 要 **ack**，否则 FIFO 反复重放：
   `check --ack <deliveryId> --run <run> --wait --types ...`。
 - 结算：`worker-release --dispatch <dispatch> --json`（**不接受 `--run`**）；

@@ -25,6 +25,9 @@ TUI/GUI、diff、权限等机制摸索出来。
    跑编译/测试，并把结果回灌给模型继续。
 2. 每一层机制都有：可运行实现 + 事件流观测 + 一篇能让别人学会的机制文档。
 3. 把"无形的上下文"变成**可见的数字**：token、缓存命中、注入点、工具往返。
+4. （学习层）把项目本身做成教材：`docs/LEARNING.md`（三节课路径）、
+   `docs/MYTHS.md`（常识 vs 实测）、观测台的 **Forensics / Labs / Learn**，
+   让"读—跑—验证"闭环。
 
 **非目标**（至少 M0–M3 内）
 
@@ -83,5 +86,7 @@ post 的清单缺了几块，本项目补入（详见 `docs/MECHANISMS.md`）：
 ## 7. 安全与边界
 
 M0 权限层是**非交互的**（`yolo` / `standard` / `readonly` 三档），只建立
-"闸门在哪"的缝，不做交互审批。文件工具限制在 `AGENT_CWD` 内，拒绝路径逃逸。
+"闸门在哪"的缝；完整的有序策略 + hooks（`HOOKS_FILE` / `POLICY_FILE`）与
+交互式审批（M12，`ask` 被 await 成人工决策）位于 `mechanisms/hooks/` 与
+`AgentConfig.approvals`。文件工具限制在 `AGENT_CWD` 内，拒绝路径逃逸。
 生产级沙箱（seatbelt / landlock / 容器）明确不在范围内。

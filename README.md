@@ -7,11 +7,13 @@
 compaction / MCP / session / 权限等机制）。重点不是"再造一个 agent"，而是**把
 那些平时说不清楚的机制，用真实 API 的用量数据讲明白**。
 
-> 状态：**M0–M8 全部完成**（含 INT-A/B1/B2 三个整合阶段）；**v2（M9 memory /
-> M10 orchestrator / M11 tool-search）已由 INT-C 接进 server + web**；
-> **M12 交互式审批 + 斜杠命令已完成**。`pnpm typecheck` 覆盖 core / server / web / cli，
-> web 可构建。进度见 [`docs/ROADMAP.md`](docs/ROADMAP.md)，协调者交接见
-> [`docs/STATE.md`](docs/STATE.md)，M12 证据见 [`docs/runs/m12.md`](docs/runs/m12.md)。
+> 状态：**功能完成**——M0–M12（v1 + v2）全部实现并整合；在此之上完成 **learn wave**
+> （L1 cache forensics / L2 三节课路径+常识实测 / L3 labs）与收尾 INT-L。`pnpm typecheck`
+> 覆盖 core / server / web / cli，web 可构建。进度见 [`docs/ROADMAP.md`](docs/ROADMAP.md)，
+> 协调者交接见 [`docs/STATE.md`](docs/STATE.md)，M12 证据见
+> [`docs/runs/m12.md`](docs/runs/m12.md)，学习波次见
+> [`docs/runs/l1-cache-forensics.md`](docs/runs/l1-cache-forensics.md) /
+> [`docs/runs/l3-labs.md`](docs/runs/l3-labs.md)。
 
 ## 学习路径 / 学习工具
 
@@ -35,7 +37,7 @@ compaction / MCP / session / 权限等机制）。重点不是"再造一个 agen
 | [`docs/SPEC.md`](docs/SPEC.md) | 目标、非目标、已定决策、设计原则 |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 仓库结构、分层、核心接口、数据流 |
 | [`docs/MECHANISMS.md`](docs/MECHANISMS.md) | 机制地图 + **已核实的真实事实**（§7） |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | 里程碑 M0–M8 与 Orca 并行开发策略 |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | 里程碑 M0–M12、学习辅助（L 系列）与 Orca 并行开发策略 |
 | [`docs/CONTRACT.md`](docs/CONTRACT.md) | 冻结的 HTTP / 事件契约 |
 | [`docs/mechanisms/`](docs/mechanisms/) | 每个机制的讲解 |
 | [`docs/runs/`](docs/runs/) | 每个里程碑的**实测数据** |

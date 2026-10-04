@@ -26,16 +26,16 @@
 |---|---|---|---|
 | L0 | tool loop 状态机 | 一个 turn 的精确状态与停止条件 | M0 ✅ |
 | L1 | system 装配 / 环境注入 / AGENTS.md | 什么必须进前缀、什么必须后置 | M0 ✅ |
-| L2 | 缓存与 token 经济 | 谁在破坏前缀，代价多大 | M1 |
-| L3 | 压缩 / tool-result clearing / memory | 压缩时保什么、缓存怎么处理 | M3 |
-| L4 | skill（渐进披露） | 取 skill 正文为何不重写前缀 | M2 |
-| L4 | MCP（tool/resource/prompt） | 工具 schema 何时注入、顺序为何有害 | M4 |
+| L2 | 缓存与 token 经济 | 谁在破坏前缀，代价多大 | M1 ✅ / L1 ✅ |
+| L3 | 压缩 / tool-result clearing / memory | 压缩时保什么、缓存怎么处理 | M3 ✅ / M9 ✅ |
+| L4 | skill（渐进披露） | 取 skill 正文为何不重写前缀 | M2 ✅ |
+| L4 | MCP（tool/resource/prompt） | 工具 schema 何时注入、顺序为何有害 | M4 ✅（惰性方案见 M11） |
 | L4 | hooks / slash commands | 生命周期注入点在哪 | M6 ✅ / M12 ✅ |
-| L5 | subagent / 多 agent | 隔离上下文 + 结果回灌的成本模型 | M5 |
-| L5 | background / scheduled | 非阻塞执行与定时触发 | M7 |
-| L6 | session / fork / checkpoint | 会话边界、代码回滚与对话回滚解耦 | M6 |
-| L7 | 权限 / 沙箱 | 每次决策在哪一层拦截 | M0 缝，M6 完整 |
-| L8 | 观测台 / diff / cost | 如何让上下文可见 | M0 ✅ |
+| L5 | subagent / 多 agent | 隔离上下文 + 结果回灌的成本模型 | M5 ✅ / M10 ✅ |
+| L5 | background / scheduled | 非阻塞执行与定时触发 | M7 ✅ |
+| L6 | session / fork / checkpoint | 会话边界、代码回滚与对话回滚解耦 | M6 ✅ / M8 ✅ |
+| L7 | 权限 / 沙箱 | 每次决策在哪一层拦截 | M0 缝，M6 ✅，M12 ✅ |
+| L8 | 观测台 / diff / cost | 如何让上下文可见 | M0 ✅ / L1 ✅ / L3 ✅ |
 
 ## 2. 深挖一：Skill 与 KV cache
 
@@ -144,6 +144,10 @@ cache creation 的 0.76%"**；压缩后，attachment builders 会**重新宣告�
 5. subagent 回灌 vs 主上下文直做的 token 账。（M5）
 
 > 每解决一条，就在对应里程碑的机制文档里补上**实测数据**与结论。
+
+> **结清**：1–5 全部由 M1–M5 用真实 `usage` 定论（见 §7），另有 M9/M10/M11/M12
+> 的延伸结论也已回填。速览见 [`docs/MYTHS.md`](MYTHS.md)；逐章学习路径见
+> [`docs/LEARNING.md`](LEARNING.md)。
 
 ## 7. 实测结论（回填）
 

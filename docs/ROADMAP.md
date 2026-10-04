@@ -13,7 +13,7 @@
 
 ## 里程碑
 
-### M0 — 纵向切片：能观测的最小循环 ✅（进行中）
+### M0 — 纵向切片：能观测的最小循环 ✅
 
 - **机制**：L0 循环、L1 上下文装配、L2 手写客户端与 usage、L6 事件日志、L8 观测台。
 - **交付**：`@agent/core` + `@agent/server` + `apps/web`，能输入任务、跑工具循环、
@@ -132,8 +132,14 @@ orca worktree create --name m2-skills --no-parent --agent <agent> \
 - [x] INT-B1 循环型机制（hooks/permissions + compaction；见 `docs/runs/int-b1.md`）
 - [x] INT-B2 循环型机制（checkpoint + scheduler；见 `docs/runs/int-b2.md`）
 - [x] M8 会话 UX 与 CLI 副产物（见 `docs/runs/m8.md`）
+- [x] M9 memory 跨会话记忆（见 `docs/runs/m9-memory.md`）
+- [x] M10 orchestrator 多 worker（见 `docs/runs/m10-orchestrator.md`）
+- [x] M11 lazy tool exposure（见 `docs/runs/m11-tool-search.md`）
 - [x] INT-C memory + orchestrator + tool-search 接入 server/web（见 `docs/runs/int-c.md`）
 - [x] M12 interactive approval + slash commands（见 `docs/runs/m12.md`）
+- [x] L1 cache forensics / L2 学习文档 / L3 labs / INT-L 收尾（见 `docs/runs/l1-cache-forensics.md`、`docs/runs/l3-labs.md`）
+
+> 至此 M0–M12（v1 + v2）与学习辅助（L 系列）全部完成并合入 `master`。
 
 ## v2 规划（M9–M12）
 
@@ -173,4 +179,4 @@ M9–M12 完成后，机制侧已够用；接下来服务于 SPEC §3 的三条�
 后续候选：练习模式（骨架 + 用实验当判分器）。
 
 L1（代码，动 `apps/web` + `packages/core`）与 L2（纯文档，只新建两个文件）
-互不冲突，可并行。
+互不冲突，可并行；L3 与 INT-L 因改动共享文件而串行，均已合入。
