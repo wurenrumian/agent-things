@@ -144,7 +144,7 @@ subagent/scheduler 升格成一个真正的 **orchestrator**。
 | M9 | memory | 跨会话记忆 + 召回；**注入位置对缓存的影响** | INT-C ✅ |
 | M10 | orchestrator | supervisor + 持久 mailbox（wait/ack）+ worker 注册表；**事件流原生、不需要 PTY** | INT-C ✅ |
 | M11 | lazy tool exposure | 用一个 `tool_search`/`tool_call` 门面替换 N 份工具 schema，压缩前缀 | INT-C ✅ |
-| M12 | interactive approval + slash commands | 把 `ask` verdict 变成真正的人机审批；slash 命令注入点 | 待定 |
+| M12 | interactive approval + slash commands | 把 `ask` verdict 变成真正的人机审批；slash 命令注入点 | 进行中 |
 
 wave-3 并行（`docs/briefs/_wave3-constraints.md`）：三个机制各自只在
 `packages/core/src/mechanisms/<name>/` + 自己的脚本/文档内改动，**零共享文件改动**；
