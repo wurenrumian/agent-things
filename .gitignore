@@ -12,4 +12,5 @@ data/
 # of the main worktree's index.
 /m[0-9]*-*/
 /int-*/
+/l[0-9]*-*/
 
