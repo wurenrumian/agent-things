@@ -1,38 +1,34 @@
-# L3 — Labs (run report)
+# L3 — Labs（运行报告）
 
-**Goal.** Turn the observatory into a teaching instrument: a **Labs** tab that
-catalogs every `packages/server/scripts/*-experiment.ts` harness and runs it with
-the output streaming live. Reuse the scripts; add no dependency; keep the rest of
-the server byte-for-byte unchanged when labs are disabled.
+**目标。** 把观测台变成一件教学工具：一个 **Labs** 标签页，把每个
+`packages/server/scripts/*-experiment.ts` harness 编成目录，并让输出实时流式跑出来。
+复用这些脚本；不新增依赖；labs 关闭时服务器其余部分逐字节不变。
 
-**Outcome.** Implemented and verified end-to-end. `pnpm typecheck` (4 packages)
-and `pnpm --filter @agent/web build` are green; `GET /api/labs` returns the full
-12-lab catalog; the offline `forensics` lab streams its classifier table and
-exits `0`; a concurrent second run returns `409`; unknown id returns `404`;
-`LABS_ENABLED=false` makes the routes inert while the rest of the server is
-unchanged. Committed as `L3: labs`.
+**结果。** 已实现并端到端验证。`pnpm typecheck`（4 个包）与
+`pnpm --filter @agent/web build` 全绿；`GET /api/labs` 返回完整的 12 个实验目录；离线
+`forensics` 实验流式输出分类表并以 `0` 退出；并发的第二次运行返回 `409`；未知 id 返回
+`404`；`LABS_ENABLED=false` 让路由失效而服务器其余部分不变。提交为 `L3: labs`。
 
-## What changed
+## 改了什么
 
-- `packages/server/src/labs/types.ts` (new) — `Lab`, `LabKind`, `LabFrame`.
-- `packages/server/src/labs/registry.ts` (new) — the 12-entry **allowlist**.
-- `packages/server/src/labs/runner.ts` (new) — spawn + line-framed stream,
-  tree-kill timeout, client-disconnect kill, one-at-a-time gate.
-- `packages/server/src/config.ts` — `LABS_ENABLED` (default `true`),
-  `LAB_TIMEOUT_MS` (default `300000`).
-- `packages/server/src/index.ts` — `GET /api/labs`, `POST /api/labs/:id/run`.
-- `apps/web/src/components/LabsTab.tsx` (new) + `Observatory.tsx`, `api.ts`,
-  `types.ts`, `styles.css` — the Labs tab, catalog + confirm + live console.
-- `docs/CONTRACT.md` — new routes, new env, Labs tab note.
-- `docs/labs.md` (new) — design teaching doc + "how to add a lab".
-- `docs/runs/l3-labs.md` (new) — this report.
+- `packages/server/src/labs/types.ts`（新增）—— `Lab`、`LabKind`、`LabFrame`。
+- `packages/server/src/labs/registry.ts`（新增）—— 12 条目的**白名单**。
+- `packages/server/src/labs/runner.ts`（新增）—— spawn + 行帧流、杀进程树超时、
+  客户端断连即杀、同一时刻只跑一个的闸。
+- `packages/server/src/config.ts` —— `LABS_ENABLED`（默认 `true`）、
+  `LAB_TIMEOUT_MS`（默认 `300000`）。
+- `packages/server/src/index.ts` —— `GET /api/labs`、`POST /api/labs/:id/run`。
+- `apps/web/src/components/LabsTab.tsx`（新增）+ `Observatory.tsx`、`api.ts`、
+  `types.ts`、`styles.css` —— Labs 标签页、目录 + 确认 + 实时控制台。
+- `docs/CONTRACT.md` —— 新路由、新 env、Labs 标签页说明。
+- `docs/labs.md`（新增）—— 设计教学文档 + "如何新增一个实验"。
+- `docs/runs/l3-labs.md`（新增）—— 本报告。
 
-Scripts under `packages/server/scripts/**` and `docs/runs/*.md` other than this
-one were **read only, not edited**.
+除本文件外，`packages/server/scripts/**` 下的脚本与 `docs/runs/*.md` 均**只读、未编辑**。
 
-## Catalog (`GET /api/labs`)
+## 目录（`GET /api/labs`）
 
-Observed (server on `:8797`, `.env` `AGENT_CWD=./data/sandbox`):
+观察到的情况（server 在 `:8797`，`.env` `AGENT_CWD=./data/sandbox`）：
 
 ```
 enabled=True count=12
@@ -51,13 +47,12 @@ tool-search  api           30
 approval     api            5
 ```
 
-Three offline labs (`forensics`, `hooks`, `scheduler`) match the scripts' own
-"zero API / no model calls" headers; the other nine state a call budget in their
-header, surfaced as `apiCalls`.
+三个离线实验（`forensics`、`hooks`、`scheduler`）与脚本自身"零 API / 不调用模型"的头部
+声明吻合；另外九个在头部声明了调用预算，以 `apiCalls` 呈现。
 
-## Forensics run, streamed (`POST /api/labs/forensics/run`)
+## forensics 运行，流式（`POST /api/labs/forensics/run`）
 
-Frame histogram observed on the wire:
+在传输层观察到的帧直方图：
 
 ```
 frame types {"start":1,"stdout":13,"stderr":2,"exit":1}
@@ -65,7 +60,7 @@ exit  data: {"type":"exit","code":0,"durationMs":215}
 start data: {"type":"start","id":"forensics","command":"D:\\nodejs\\node.exe D:\\Project\\agent-things\\l3-labs\\node_modules\\.pnpm\\tsx@4.23.15\\node_modules\\tsx\\dist\\cli.mjs D:\\Project\\agent-things\\l3-labs\\packages\\server\\scripts\\forensics-experiment.ts"}
 ```
 
-The streamed `stdout` includes the classifier table and the summary:
+流式 `stdout` 包含分类表与汇总：
 
 ```
 #  case                                    expected    actual  verdict  detail
@@ -80,12 +75,11 @@ The streamed `stdout` includes the classifier table and the summary:
 ALL PASS — 6/6 cases
 ```
 
-and an `exit` frame with code `0`.
+以及一个 code 为 `0` 的 `exit` 帧。
 
-## Concurrency (409)
+## 并发（409）
 
-With a long offline lab (`scheduler`, ~6s) holding the slot, a second request to
-`forensics`:
+用一个较长的离线实验（`scheduler`，约 6s）占住槽位时，对 `forensics` 的第二次请求：
 
 ```
 second status 409 body {"error":"busy","message":"a lab is already running"}
@@ -93,12 +87,11 @@ first status 200 has exit true
 unknown status 404 {"error":"lab not found"}
 ```
 
-The slot is reserved before the SSE stream opens, so the busy case is a real
-`409` JSON response, not an empty stream.
+槽位在 SSE 流打开之前就已预留，所以忙的情况是真正的 `409` JSON 响应，而不是一条空流。
 
-## `LABS_ENABLED=false` (server unchanged)
+## `LABS_ENABLED=false`（服务器其余不变）
 
-A second server started with `LABS_ENABLED=false` on `:8798`:
+第二个服务器以 `LABS_ENABLED=false` 起在 `:8798`：
 
 ```
 GET  /api/labs            -> 200 {"enabled":false,"labs":[]}
@@ -108,9 +101,9 @@ GET  /api/sessions        -> 200
 GET  /api/mechanisms      -> 200 keys skills,mcpServers,tools,memory,orchestrator,toolSearch
 ```
 
-## Browser path (Vite proxy 5173 → 8787)
+## 浏览器路径（Vite 代理 5173 → 8787）
 
-The exact path the Labs tab uses:
+Labs 标签页实际走的路径：
 
 ```
 page status 200 content-type text/html
@@ -119,34 +112,30 @@ proxied run status 200 exit data: {"type":"exit","code":0,"durationMs":334}
 proxied run table+pass true
 ```
 
-## Bugs found and fixed during validation
+## 验证过程中发现并修复的 bug
 
-1. **`tsx` CLI resolution under pnpm.** `require.resolve("tsx/dist/cli.mjs")`
-   throws because the package's `exports` map blocks that subpath, and the naive
-   fallback `node_modules/tsx/...` does not exist under pnpm's `.pnpm` layout.
-   Fixed by resolving `tsx/package.json` and reading its `bin` field.
-2. **Dropped terminal frame.** The runner loop `while(!closed)` could exit after
-   `start` if the child finished during the `yield`, discarding the buffered
-   `exit` frame. Fixed to `while(!closed || queue.length > 0)`.
-3. **Spawn ENOENT from a missing cwd.** Running the child from `AGENT_CWD`
-   (`./data/sandbox`, not yet created) made `spawn` fail with ENOENT. Fixed by
-   running experiments from the repo root, which their relative imports and
-   `.env` discovery assume.
-4. **Busy reported on the stream, not as 409.** Initially the busy case was an
-   SSE `error` frame. Refactored `LabRunner` to reserve the slot before
-   `streamSSE`, giving a real `409`.
+1. **pnpm 下 `tsx` CLI 的解析。** `require.resolve("tsx/dist/cli.mjs")` 会抛错，因为该包
+   的 `exports` map 封死了这个子路径，而朴素的兜底 `node_modules/tsx/...` 在 pnpm 的
+   `.pnpm` 布局下并不存在。修法是解析 `tsx/package.json` 并读取其 `bin` 字段。
+2. **丢失终止帧。** runner 循环 `while(!closed)` 可能在 `start` 之后、若子进程在 `yield`
+   期间跑完时就退出，丢掉已缓冲的 `exit` 帧。改为 `while(!closed || queue.length > 0)`。
+3. **cwd 缺失导致的 spawn ENOENT。** 从 `AGENT_CWD`（`./data/sandbox`，当时尚未创建）
+   运行子进程会让 `spawn` 以 ENOENT 失败。修法是从仓库根运行实验——它们的相对 import 与
+   `.env` 发现都以此为前提。
+4. **忙状态报在流上，而不是 `409`。** 起初忙的情况是一条 SSE `error` 帧。把 `LabRunner`
+   重构成在 `streamSSE` 之前预留槽位，从而给出真正的 `409`。
 
-## Acceptance checklist
+## 验收清单
 
-| Check | Result |
+| 检查项 | 结果 |
 |---|---|
-| `pnpm typecheck` (4 packages) | green |
-| `pnpm --filter @agent/web build` | green |
-| `GET /api/labs` catalog (~12, correct kind/apiCalls) | 12, 3 offline / 9 api |
-| `POST /api/labs/forensics/run` streams table + exit 0 | yes (`ALL PASS — 6/6`) |
-| Second concurrent run | `409 {"error":"busy"}` |
-| Unknown id | `404` |
-| `LABS_ENABLED=false` routes inert, rest unchanged | `403` / `{enabled:false}` |
-| Web Labs tab renders catalog + live console | bundle verified; proxy run exit 0 |
-| `docs/labs.md` + `docs/runs/l3-labs.md` | written |
-| Commit `L3: labs` | done |
+| `pnpm typecheck`（4 个包） | 全绿 |
+| `pnpm --filter @agent/web build` | 全绿 |
+| `GET /api/labs` 目录（约 12 个，kind/apiCalls 正确） | 12，3 offline / 9 api |
+| `POST /api/labs/forensics/run` 流式输出表 + exit 0 | 是（`ALL PASS — 6/6`） |
+| 并发第二次运行 | `409 {"error":"busy"}` |
+| 未知 id | `404` |
+| `LABS_ENABLED=false` 路由失效、其余不变 | `403` / `{enabled:false}` |
+| web Labs 标签页渲染目录 + 实时控制台 | bundle 已核验；代理运行 exit 0 |
+| `docs/labs.md` + `docs/runs/l3-labs.md` | 已写 |
+| 提交 `L3: labs` | 已完成 |
