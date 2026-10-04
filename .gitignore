@@ -8,6 +8,10 @@ data/
 *.log
 .DS_Store
 
+# VitePress build artifacts / cache
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+
 # Orca worktrees are created nested inside the repo directory; keep them out
 # of the main worktree's index.
 /m[0-9]*-*/
