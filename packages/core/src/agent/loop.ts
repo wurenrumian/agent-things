@@ -105,6 +105,19 @@ export interface AgentConfig {
   /** M3 automatic compaction. Absent ⇒ history is never folded. */
   compaction?: AgentCompactor;
   /**
+   * M12 interactive approval. When a gate returns `ask` and this is set, the
+   * loop pauses: it emits `approval.requested`, awaits this callback, emits
+   * `approval.resolved`, then proceeds on `allow` or pushes a `Denied` tool
+   * message on `deny`. Absent ⇒ the historical non-interactive rule holds
+   * (`yolo` proceeds optimistically, any other mode blocks).
+   */
+  approvals?: (req: {
+    toolCallId: string;
+    tool: string;
+    input: Record<string, unknown>;
+    turnId: string;
+  }) => Promise<"allow" | "deny">;
+  /**
    * M6 file checkpoints. When set it is handed to every tool call's
    * `ToolContext.checkpoints`, so a wrapped write tool can snapshot the file
    * before mutating it. Absent ⇒ no snapshotting (the default).
@@ -454,10 +467,44 @@ export class Agent {
       return;
     }
 
-    // `ask` is a pending approval. Non-interactively we cannot wait for a
-    // human, so only `yolo` proceeds; the event above still records the true
-    // verdict either way.
-    if (decision === "ask" && mode !== "yolo") {
+    // M12: `ask` becomes a real, awaited human decision when `approvals` is
+    // configured. Emit the request, block on the callback, emit the resolution,
+    // then proceed on `allow` or hand the model a denial on `deny`. The loop is
+    // genuinely paused on the promise between the two events.
+    if (decision === "ask" && this.config.approvals) {
+      yield {
+        type: "approval.requested",
+        toolCallId: call.id,
+        name: tool.name,
+        input: executedInput,
+        turnId,
+        reason,
+        at: Date.now(),
+      };
+      const approval = await this.config.approvals({
+        toolCallId: call.id,
+        tool: tool.name,
+        input: executedInput,
+        turnId,
+      });
+      yield {
+        type: "approval.resolved",
+        toolCallId: call.id,
+        decision: approval,
+        at: Date.now(),
+      };
+      if (approval === "deny") {
+        this.messages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: `Denied: ${reason}`,
+        });
+        return;
+      }
+    } else if (decision === "ask" && mode !== "yolo") {
+      // `ask` with no approval seam: non-interactively we cannot wait for a
+      // human, so only `yolo` proceeds; the event above still records the true
+      // verdict either way.
       this.messages.push({
         role: "tool",
         tool_call_id: call.id,

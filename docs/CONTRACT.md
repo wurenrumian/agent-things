@@ -35,6 +35,7 @@ All responses JSON unless noted. Errors: `{ "error": string }` with status.
 | POST | `/api/sessions/:id/schedule` | `{ afterMs?, at?, intervalMs?, prompt }` | `TaskRecord` |
 | GET | `/api/sessions/:id/tasks` | — | `TaskRecord[]` |
 | POST | `/api/sessions/:id/messages` | `{ input: string }` | `text/event-stream` |
+| POST | `/api/sessions/:id/approvals` | `{ toolCallId, decision: "allow"\|"deny", reason? }` | `{ ok: true, toolCallId, decision }` (M12) |
 
 `SessionMeta = { id, title, cwd, createdAt, updatedAt, messageCount }`.
 
@@ -141,6 +142,8 @@ Execution rule (unchanged when unconfigured): `deny` blocks; `ask` proceeds
 **only** when `PERMISSION_MODE=yolo`, otherwise it is blocked with a
 "pending approval (non-interactive)" tool result; `allow` proceeds. The event
 always records the *true* verdict, independent of whether the call proceeds.
+M12 adds an interactive path for `ask` (below); with no approval seam wired the
+rule above holds byte-for-byte.
 
 **M3 compaction event (additive).** When auto-compaction fires at the top of a
 step it emits `{ name:"compaction", phase:"compacted", data:{ before, after,
@@ -200,6 +203,38 @@ own `readOnly:false` drives the permission layer, so a per-tool gate should
 resolve the inner tool rather than gate the facade (mechanism doc). When unset
 the real registry is exposed unchanged.
 
+**M12 interactive approval (additive).** When the composition root supplies
+`AgentConfig.approvals` and a gate returns `ask`, the loop pauses on the async
+callback instead of applying the non-interactive rule. It emits two new events
+around the pause:
+
+```jsonc
+{ "type": "approval.requested", "toolCallId": "call_1", "name": "write_file",
+  "input": { "path": "a.txt", "content": "…" }, "turnId": "s-t1",
+  "reason": "writes mutate the workspace", "at": 1791096373414 }
+{ "type": "approval.resolved", "toolCallId": "call_1", "decision": "allow",
+  "reason": "…", "at": 1791096373677 }
+```
+
+`approval.resolved.decision === "deny"` pushes a `Denied: …` tool message;
+`"allow"` proceeds to execute the tool (then `tool.result`). Neither event is
+emitted when `approvals` is absent. The server keys pending requests by
+`sessionId:toolCallId` and exposes `POST /api/sessions/:id/approvals`
+(`404` unknown session, `409` no waiting turn, `400` bad body); it resolves
+`deny` after `APPROVAL_TIMEOUT_MS` (default 30s) so a turn can never hang.
+`reason` is accepted for host audit/display.
+
+**M12 slash commands (additive).** `POST /api/sessions/:id/messages` inspects
+`input` for a leading `/<name>` **before** running a model turn. A **registered**
+command (`/help`, `/memory <query>`, `/workers`, `/compact`) is handled
+server-side and emits `mechanism` (`name:"command"`, `phase:<name>`,
+`data:{ args, reply, injected }`) plus a synthetic `assistant.message` and
+`turn.end` — **no model turn** for a synthetic reply. A command may instead
+return `inject: ChatMessage[]`, which is appended at the **tail** (never
+splicing the system prefix) before a normal model turn. **Unknown** slash input
+(`/foo`, `/etc/hosts`) is not a command and falls through as ordinary model
+input. Commands are not exposed as tools, so they add no schema tokens.
+
 ## Config (server, from env)
 
 Read from repo-root `.env` (do not add a dotenv dependency; write a tiny loader).
@@ -252,6 +287,9 @@ Read from repo-root `.env` (do not add a dotenv dependency; write a tiny loader)
 - `TOOL_SEARCH_ENABLED` (`true` | `false`, default `false`). When `true`, wraps
   the final registry in the M11 two-tool facade, so `GET /api/config` lists only
   `tool_call` + `tool_search`.
+- `APPROVAL_TIMEOUT_MS` (positive integer, default `30000`). How long an `ask`
+  approval may wait before the server resolves it `deny` (fail closed). Only
+  meaningful when a gate (`POLICY_FILE`/`HOOKS_FILE`) can produce `ask`.
 
 ## Web app (Vite + React + TS, dev port 5173)
 
@@ -270,7 +308,12 @@ Read from repo-root `.env` (do not add a dotenv dependency; write a tiny loader)
     monospace with `+` green / `-` red / context dim. Only shown once a diff
     exists.
 - Send box posts to `/api/sessions/:id/messages` and consumes the SSE stream,
-  appending events live.
+  appending events live. The box also accepts slash commands (`/help`,
+  `/memory <query>`, `/workers`, `/compact`); their synthetic replies arrive on
+  the same stream and render like an assistant message.
+- **Approval control (M12, additive):** on an `approval.requested` frame the
+  app shows an Allow/Deny bar (tool, reason, input) and POSTs the decision to
+  `/api/sessions/:id/approvals`; `approval.resolved` clears it.
 - Session picker: list sessions, create a new one, load existing events on select.
   A **Fork** action (M8) branches the selected session; each assistant turn also
   exposes a per-message fork through that point.

@@ -8,10 +8,10 @@ compaction / MCP / session / 权限等机制）。重点不是"再造一个 agen
 那些平时说不清楚的机制，用真实 API 的用量数据讲明白**。
 
 > 状态：**M0–M8 全部完成**（含 INT-A/B1/B2 三个整合阶段）；**v2（M9 memory /
-> M10 orchestrator / M11 tool-search）已由 INT-C 接进 server + web**。`pnpm typecheck`
-> 覆盖 core / server / web / cli，web 可构建。进度见 [`docs/ROADMAP.md`](docs/ROADMAP.md)，
-> 协调者交接见 [`docs/STATE.md`](docs/STATE.md)，整合证据见
-> [`docs/runs/int-c.md`](docs/runs/int-c.md)。
+> M10 orchestrator / M11 tool-search）已由 INT-C 接进 server + web**；
+> **M12 交互式审批 + 斜杠命令已完成**。`pnpm typecheck` 覆盖 core / server / web / cli，
+> web 可构建。进度见 [`docs/ROADMAP.md`](docs/ROADMAP.md)，协调者交接见
+> [`docs/STATE.md`](docs/STATE.md)，M12 证据见 [`docs/runs/m12.md`](docs/runs/m12.md)。
 
 ## 文档
 
@@ -31,7 +31,7 @@ compaction / MCP / session / 权限等机制）。重点不是"再造一个 agen
 ```
 packages/core    内核：类型、事件、OpenRouter 客户端、上下文装配、工具、循环、存储
                  ＋ mechanisms/{skills,mcp,subagent,compaction,hooks,checkpoint,scheduler,
-                   memory,orchestrator,tool-search}
+                   memory,orchestrator,tool-search,commands}
 packages/server  HTTP + SSE，把内核包成服务（组装根 compose.ts、契约路由）
 packages/cli     agent-things 命令行：同一个内核的第二个消费者
 apps/web         上下文观测台（Vite + React；Timeline / Context / Usage / Diff …）
@@ -72,6 +72,8 @@ pnpm --filter @agent/cli exec tsx src/index.ts --help
 | memory 跨会话记忆 | `MEMORY_ENABLED` `MEMORY_DIR` `MEMORY_SYSTEM_INJECT` | [run](docs/runs/m9-memory.md) · INT-C |
 | orchestrator 多 worker | `ORCHESTRATOR_ENABLED` `ORCHESTRATOR_MAX_WORKERS` | [mechanism](docs/mechanisms/orchestrator.md) · [run](docs/runs/m10-orchestrator.md) · INT-C |
 | lazy tool exposure | `TOOL_SEARCH_ENABLED` | [run](docs/runs/m11-tool-search.md) · INT-C |
+| interactive approval 交互审批 | `POLICY_FILE`/`HOOKS_FILE` + `APPROVAL_TIMEOUT_MS` | [approval.md](docs/mechanisms/approval.md) · [run](docs/runs/m12.md) |
+| slash commands 斜杠命令 | 默认开启（`/help` `/memory` `/workers` `/compact`） | [commands.md](docs/mechanisms/commands.md) · [run](docs/runs/m12.md) |
 
 ## 设计原则（摘要）
 

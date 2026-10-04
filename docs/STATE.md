@@ -97,6 +97,16 @@ pnpm monorepo（`packages/core` 内核 + `packages/server` HTTP/SSE + `apps/web`
   返回 supervisor 快照；`TOOL_SEARCH_ENABLED=true` 时 `/api/config` 只列
   `tool_call` + `tool_search`。**未新增依赖**。
 
+**M12 交互式审批 + 斜杠命令** — 单 worker 波次（改共享文件）。`AgentConfig.approvals`
++ `approval.requested`/`approval.resolved`（`events.ts` 追加）；`ask` 变为被 await 的
+人机决策，未配置时路径逐字节不变。服务器 pending map + `POST /api/sessions/:id/approvals`
+（404/409/400）+ `APPROVAL_TIMEOUT_MS`（默认 30s，超时 resolve `deny`）。Web 加
+Allow/Deny 控件。新自包含 `mechanisms/commands/`（`CommandRegistry` + `parseCommand`
++ 内置 `/help` `/memory` `/workers` `/compact`），在 `POST …/messages` 处**前置拦截**，
+命中零模型 turn，未知斜杠输入回落模型；注入只追加尾部。证据 `docs/runs/m12.md`；
+讲解 `docs/mechanisms/{approval,commands}.md`。真实模型实验：deny/allow 事件序列与
+250ms 回调停顿（Δ≈263ms）；服务器 allow/deny/timeout（~1513ms）全通过。**未新增依赖**。
+
 ## 6. 状态：**全部里程碑完成** 🎉（已打 tag `v1`）
 
 M0–M8 与 INT-A/B1/B2 全部合入 `master`，`pnpm typecheck`（core/server/web/cli）+ web build 全绿。
@@ -104,6 +114,9 @@ M0–M8 与 INT-A/B1/B2 全部合入 `master`，`pnpm typecheck`（core/server/w
 
 **v2 进展**：M9/M10/M11 三个机制已合入 `master`；**INT-C 已把三者接进 server + web
 并回填文档**（见 §5 与 `docs/runs/int-c.md`）。`MECHANISMS.md §7` 已补 M9/M10/M11 实测。
+**M12 也已完成**（见 §5）：交互式审批 + 斜杠命令，`docs/runs/m12.md` 与两篇机制文档
+已就位，typecheck / web build / 真实模型实验 / 服务器 E2E 全绿。v2 四个里程碑（M9–M12）
+至此齐活。
 
 可选后续（非里程碑）：
 1. 把 M2–M7 的机制在 web 观测台做成**专面板**（目前主要是 Timeline + Mechanisms 条带 + Diff）。

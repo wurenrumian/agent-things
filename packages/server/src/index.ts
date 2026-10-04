@@ -1,11 +1,12 @@
 import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
-import { streamSSE } from "hono/streaming";
+import { streamSSE, type SSEStreamingApi } from "hono/streaming";
 import {
   Agent,
   Store,
   type AgentConfig,
+  type AgentEvent,
   type SessionMeta,
 } from "@agent/core";
 import { loadConfig, type ServerConfig } from "./config.js";
@@ -17,6 +18,15 @@ import {
   taskOutcomeToEvent,
   type Scheduler,
 } from "../../core/src/mechanisms/scheduler/index.js";
+import {
+  recall,
+  renderMemories,
+} from "../../core/src/mechanisms/memory/index.js";
+import {
+  CommandRegistry,
+  parseCommand,
+  registerBuiltins,
+} from "../../core/src/mechanisms/commands/index.js";
 
 /**
  * HTTP + SSE shell around the `@agent/core` kernel (the "L8" layer).
@@ -47,6 +57,12 @@ interface Runtime {
   mcpServers: string[];
   /** Whether the M11 lazy tool facade is active (`TOOL_SEARCH_ENABLED`). */
   toolSearchEnabled: boolean;
+  /**
+   * M12: resolvers for interactive approvals still waiting on a human, keyed
+   * `${sessionId}:${toolCallId}`. `POST /api/sessions/:id/approvals` looks one
+   * up and resolves it; a per-request timeout resolves `deny` and clears it.
+   */
+  approvals: Map<string, (decision: "allow" | "deny", reason?: string) => void>;
   /** Tear down long-lived mechanism resources (MCP stdio children). */
   close: () => void;
 }
@@ -68,6 +84,7 @@ async function createRuntime(config: ServerConfig): Promise<Runtime> {
     skills: composed.skills,
     mcpServers: composed.mcpServers,
     toolSearchEnabled: config.toolSearchEnabled,
+    approvals: new Map(),
     close: composed.close,
   };
 
@@ -101,17 +118,122 @@ async function createRuntime(config: ServerConfig): Promise<Runtime> {
   return rt;
 }
 
-/** One `Agent` per session, created on first use with messages from the store. */
+/**
+ * One `Agent` per session, created on first use with messages from the store.
+ *
+ * M12 attaches the interactive `approvals` seam here (per session, so the
+ * resolver can be keyed by session id). It only ever fires when a gate returns
+ * `ask`; with no gate configured no decision is `ask`, so the unconfigured path
+ * is unchanged.
+ */
 function getAgent(rt: Runtime, session: SessionMeta): Agent {
   const existing = rt.agents.get(session.id);
   if (existing) return existing;
   const agent = new Agent(
-    { ...rt.agentConfig, cwd: session.cwd },
+    {
+      ...rt.agentConfig,
+      cwd: session.cwd,
+      approvals: (request) => requestApproval(rt, session.id, request),
+    },
     session.id,
     rt.store.getMessages(session.id),
   );
   rt.agents.set(session.id, agent);
   return agent;
+}
+
+/**
+ * M12: block a turn on a human decision. Registers a resolver under
+ * `${sessionId}:${toolCallId}` and resolves `deny` after `APPROVAL_TIMEOUT_MS`
+ * (default 30s) so a turn whose gate returned `ask` can never hang forever. The
+ * timer is not `unref`ed: keeping the loop alive while an approval is pending is
+ * exactly what we want.
+ */
+function requestApproval(
+  rt: Runtime,
+  sessionId: string,
+  request: { toolCallId: string },
+): Promise<"allow" | "deny"> {
+  const key = `${sessionId}:${request.toolCallId}`;
+  return new Promise<"allow" | "deny">((resolve) => {
+    const timer = setTimeout(() => {
+      rt.approvals.delete(key);
+      resolve("deny");
+    }, rt.config.approvalTimeoutMs);
+    rt.approvals.set(key, (decision) => {
+      clearTimeout(timer);
+      rt.approvals.delete(key);
+      resolve(decision);
+    });
+  });
+}
+
+/**
+ * M12: build a fresh command registry bound to one session. `/compact` needs
+ * the live `Agent`, so the registry is per-request rather than global; the
+ * mechanism-specific work is injected as a host (see `commands/builtins.ts`).
+ */
+function buildCommandRegistry(rt: Runtime, session: SessionMeta): CommandRegistry {
+  const registry = new CommandRegistry();
+  registerBuiltins(registry, {
+    recallMemory(query) {
+      if (!rt.memories) return undefined;
+      // M9 `recall` over the live store: deterministic, no model call.
+      const hits = recall(query, { entries: rt.memories.entries, limit: 5 });
+      if (hits.length === 0) {
+        return `${renderMemories([])}\nNo memory matched "${query}".`;
+      }
+      return renderMemories(hits);
+    },
+    workerSnapshot() {
+      const supervisor = rt.supervisor;
+      if (!supervisor) return undefined;
+      const workers = supervisor.registry.snapshot();
+      const usage = supervisor.usage();
+      if (workers.length === 0) {
+        return "No workers registered.\nusage: 0 tokens, $0.000000";
+      }
+      const lines = workers.map(
+        (worker) =>
+          `  [${worker.status}] ${worker.id} (${worker.name})` +
+          (worker.error ? ` — ${worker.error}` : ""),
+      );
+      return [
+        `Workers (${workers.length}):`,
+        ...lines,
+        `usage: ${usage.totalTokens} tokens, $${usage.cost.toFixed(6)}`,
+      ].join("\n");
+    },
+    async compactNow() {
+      const agent = getAgent(rt, session);
+      const report = await agent.compactNow();
+      if (!report) return undefined;
+      rt.store.saveMessages(session.id, agent.messages);
+      rt.store.touch(session.id);
+      rt.store.appendEvents(session.id, [
+        {
+          type: "mechanism",
+          name: "compaction",
+          phase: "compacted",
+          data: {
+            before: report.before,
+            after: report.after,
+            summarized: report.summarized,
+            keptRecent: report.keptRecent,
+            keptLeading: report.keptLeading,
+            placement: report.placement,
+            via: "command",
+          },
+          at: Date.now(),
+        },
+      ]);
+      return (
+        `Compacted ${report.before} → ${report.after} tokens ` +
+        `(summarized ${report.summarized}, kept ${report.keptRecent} recent).`
+      );
+    },
+  });
+  return registry;
 }
 
 /** Parse a JSON body, returning `undefined` for missing / malformed input. */
@@ -467,6 +589,50 @@ function buildApp(rt: Runtime): Hono {
     }
   });
 
+  /**
+   * M12: resolve a pending interactive approval. Body
+   * `{ toolCallId, decision: "allow"|"deny", reason? }`. Returns `404` when the
+   * session is unknown and `409` when no turn is waiting on that tool call
+   * (already resolved or timed out). Resolution unblocks the awaiting
+   * `AgentConfig.approvals` callback inside the suspended turn.
+   */
+  app.post("/api/sessions/:id/approvals", async (c) => {
+    const id = c.req.param("id");
+    if (!rt.store.getSession(id)) {
+      return c.json({ error: "session not found" }, 404);
+    }
+
+    const body = await readJson(c);
+    const toolCallId = body?.["toolCallId"];
+    const decision = body?.["decision"];
+    if (
+      typeof toolCallId !== "string" ||
+      toolCallId.length === 0 ||
+      (decision !== "allow" && decision !== "deny")
+    ) {
+      return c.json(
+        {
+          error:
+            'toolCallId (string) and decision ("allow"|"deny") are required',
+        },
+        400,
+      );
+    }
+
+    const key = `${id}:${toolCallId}`;
+    const resolve = rt.approvals.get(key);
+    if (!resolve) {
+      return c.json(
+        { error: "no approval request is waiting for this toolCallId" },
+        409,
+      );
+    }
+    const reason =
+      typeof body?.["reason"] === "string" ? body["reason"] : undefined;
+    resolve(decision, reason);
+    return c.json({ ok: true, toolCallId, decision });
+  });
+
   app.post("/api/sessions/:id/messages", async (c) => {
     const id = c.req.param("id");
     const session = rt.store.getSession(id);
@@ -479,16 +645,68 @@ function buildApp(rt: Runtime): Hono {
       return c.json({ error: "input is required" }, 400);
     }
 
+    // M12: slash commands are input pre-processing, evaluated **before** any
+    // model turn. Only a *registered* command is intercepted; unknown slash
+    // input (e.g. "/etc/hosts" or "/foo") falls through as normal model input.
+    const parsed = parseCommand(input);
+    const command = parsed
+      ? buildCommandRegistry(rt, session).get(parsed.name)
+      : undefined;
+
+    /** Persist + stream one event (synthetic or real). */
+    const write = async (stream: SSEStreamingApi, event: AgentEvent) => {
+      rt.store.appendEvents(id, [event]);
+      await stream.writeSSE({ event: event.type, data: JSON.stringify(event) });
+    };
+
     const agent = getAgent(rt, session);
 
     return streamSSE(c, async (stream) => {
       try {
-        for await (const event of agent.run(input, c.req.raw.signal)) {
-          rt.store.appendEvents(id, [event]);
-          await stream.writeSSE({
-            event: event.type,
-            data: JSON.stringify(event),
+        if (parsed && command) {
+          const result = await command.handler(parsed.args, {
+            sessionId: id,
+            cwd: session.cwd,
           });
+
+          // The command itself is observable as a mechanism event.
+          await write(stream, {
+            type: "mechanism",
+            name: "command",
+            phase: command.name,
+            data: {
+              args: parsed.args,
+              reply: result.reply,
+              injected: result.inject?.length ?? 0,
+            },
+            at: Date.now(),
+          });
+
+          if (result.inject && result.inject.length > 0) {
+            // Tail-only injection (cache-safe): append, never rewrite the
+            // system prefix, then run a normal model turn with the injection.
+            agent.messages.push(...result.inject);
+            rt.store.saveMessages(id, agent.messages);
+            for await (const event of agent.run(input, c.req.raw.signal)) {
+              await write(stream, event);
+              if (event.type === "turn.end") break;
+            }
+            return;
+          }
+
+          if (typeof result.reply === "string") {
+            await write(stream, {
+              type: "assistant.message",
+              message: { role: "assistant", content: result.reply },
+              at: Date.now(),
+            });
+            await write(stream, { type: "turn.end", reason: "stop", at: Date.now() });
+          }
+          return;
+        }
+
+        for await (const event of agent.run(input, c.req.raw.signal)) {
+          await write(stream, event);
           // The turn is over: persist the context the model now sees and the
           // "what happened" log, then end the stream.
           if (event.type === "turn.end") break;

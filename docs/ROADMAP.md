@@ -133,6 +133,7 @@ orca worktree create --name m2-skills --no-parent --agent <agent> \
 - [x] INT-B2 循环型机制（checkpoint + scheduler；见 `docs/runs/int-b2.md`）
 - [x] M8 会话 UX 与 CLI 副产物（见 `docs/runs/m8.md`）
 - [x] INT-C memory + orchestrator + tool-search 接入 server/web（见 `docs/runs/int-c.md`）
+- [x] M12 interactive approval + slash commands（见 `docs/runs/m12.md`）
 
 ## v2 规划（M9–M12）
 
@@ -144,7 +145,7 @@ subagent/scheduler 升格成一个真正的 **orchestrator**。
 | M9 | memory | 跨会话记忆 + 召回；**注入位置对缓存的影响** | INT-C ✅ |
 | M10 | orchestrator | supervisor + 持久 mailbox（wait/ack）+ worker 注册表；**事件流原生、不需要 PTY** | INT-C ✅ |
 | M11 | lazy tool exposure | 用一个 `tool_search`/`tool_call` 门面替换 N 份工具 schema，压缩前缀 | INT-C ✅ |
-| M12 | interactive approval + slash commands | 把 `ask` verdict 变成真正的人机审批；slash 命令注入点 | 进行中 |
+| M12 | interactive approval + slash commands | 把 `ask` verdict 变成真正的人机审批；slash 命令注入点 | ✅（[`runs/m12.md`](runs/m12.md)） |
 
 wave-3 并行（`docs/briefs/_wave3-constraints.md`）：三个机制各自只在
 `packages/core/src/mechanisms/<name>/` + 自己的脚本/文档内改动，**零共享文件改动**；

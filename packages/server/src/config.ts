@@ -115,6 +115,12 @@ export interface ServerConfig {
   orchestratorMaxWorkers: number;
   /** Whether M11 lazy tool exposure is enabled (`TOOL_SEARCH_ENABLED`). */
   toolSearchEnabled: boolean;
+  /**
+   * M12: how long an interactive approval request may wait before it is
+   * resolved as `deny` (`APPROVAL_TIMEOUT_MS`, default 30000). This guarantees
+   * a turn whose gate returns `ask` can never hang forever.
+   */
+  approvalTimeoutMs: number;
 }
 
 /** Summary placement, mirroring the compaction mechanism's union. */
@@ -331,6 +337,11 @@ export function loadConfig(): ServerConfig {
       process.env["TOOL_SEARCH_ENABLED"],
       false,
       "TOOL_SEARCH_ENABLED",
+    ),
+    approvalTimeoutMs: parsePositiveInt(
+      process.env["APPROVAL_TIMEOUT_MS"],
+      30_000,
+      "APPROVAL_TIMEOUT_MS",
     ),
   };
 }

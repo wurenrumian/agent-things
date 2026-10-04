@@ -138,6 +138,23 @@ export type AgentEvent =
       reason: string;
       at: number;
     }
+  /** M12 interactive approval (additive). */
+  | {
+      type: "approval.requested";
+      toolCallId: string;
+      name: string;
+      input: Record<string, unknown>;
+      turnId: string;
+      reason: string;
+      at: number;
+    }
+  | {
+      type: "approval.resolved";
+      toolCallId: string;
+      decision: "allow" | "deny";
+      reason?: string;
+      at: number;
+    }
   | {
       type: "tool.call";
       toolCallId: string;
@@ -200,6 +217,10 @@ export type RequestEvent = Extract<AgentEvent, { type: "request.sent" }>;
 export type UsageEvent = Extract<AgentEvent, { type: "usage" }>;
 export type ToolCallEvent = Extract<AgentEvent, { type: "tool.call" }>;
 export type TurnEndEvent = Extract<AgentEvent, { type: "turn.end" }>;
+export type ApprovalRequestedEvent = Extract<
+  AgentEvent,
+  { type: "approval.requested" }
+>;
 
 /* ------------------------------------------------------------------- store */
 
