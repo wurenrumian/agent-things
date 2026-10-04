@@ -6,12 +6,19 @@ import {
   getMechanisms,
   getSession,
   listSessions,
+  resolveApproval,
   sendMessage,
 } from "./api";
 import { Conversation, buildToolNames } from "./components/Conversation";
 import { Observatory } from "./components/Observatory";
 import { SessionPicker } from "./components/SessionPicker";
-import type { AgentEvent, ChatMessage, Mechanisms, SessionMeta } from "./types";
+import type {
+  AgentEvent,
+  ApprovalRequestedEvent,
+  ChatMessage,
+  Mechanisms,
+  SessionMeta,
+} from "./types";
 
 export default function App() {
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
@@ -23,6 +30,8 @@ export default function App() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(false);
+  /** M12: the tool call currently waiting on a human Allow/Deny decision. */
+  const [approval, setApproval] = useState<ApprovalRequestedEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
@@ -43,6 +52,7 @@ export default function App() {
     const token = ++loadTokenRef.current;
     setSelectedId(id);
     setStreaming("");
+    setApproval(null);
     setError(null);
     setLoading(true);
     try {
@@ -106,6 +116,7 @@ export default function App() {
     setInput("");
     setSending(true);
     setStreaming("");
+    setApproval(null);
     setMessages((prev) => [
       ...prev,
       { role: "user", content: text } satisfies ChatMessage,
@@ -121,6 +132,7 @@ export default function App() {
           applyLiveEvent(event, {
             setStreaming,
             setMessages,
+            setApproval,
           });
         },
         onError: (err) => setError(toMessage(err)),
@@ -138,7 +150,23 @@ export default function App() {
     abortRef.current?.abort();
     setSending(false);
     setStreaming("");
+    setApproval(null);
   }, []);
+
+  /** M12: send this tool call's Allow/Deny decision to the suspended turn. */
+  const handleApproval = useCallback(
+    async (decision: "allow" | "deny") => {
+      if (!selectedId || !approval) return;
+      const toolCallId = approval.toolCallId;
+      setApproval(null);
+      try {
+        await resolveApproval(selectedId, toolCallId, decision);
+      } catch (err) {
+        setError(toMessage(err));
+      }
+    },
+    [approval, selectedId],
+  );
 
   const toolNames = useMemo(() => buildToolNames(events), [events]);
   const selected = sessions.find((s) => s.id === selectedId);
@@ -190,6 +218,39 @@ export default function App() {
             toolNames={toolNames}
             onFork={(atMessageIndex) => void handleFork(atMessageIndex)}
           />
+          {approval && (
+            <div
+              className="approval-bar"
+              role="alertdialog"
+              aria-label="tool approval requested"
+            >
+              <div className="approval-text">
+                <span className="approval-title">⏸ Approval required</span>
+                <span className="approval-detail">
+                  <code>{approval.name}</code> — {approval.reason}
+                </span>
+                <pre className="approval-input">
+                  {JSON.stringify(approval.input, null, 2)}
+                </pre>
+              </div>
+              <div className="approval-actions">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => void handleApproval("allow")}
+                >
+                  Allow
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => void handleApproval("deny")}
+                >
+                  Deny
+                </button>
+              </div>
+            </div>
+          )}
           <form
             className="send-box"
             onSubmit={(e) => {
@@ -242,6 +303,7 @@ export default function App() {
 interface LiveSetters {
   setStreaming: (fn: (prev: string) => string) => void;
   setMessages: (fn: (prev: ChatMessage[]) => ChatMessage[]) => void;
+  setApproval: (value: ApprovalRequestedEvent | null) => void;
 }
 
 /** Fold one streamed event into the live conversation view. */
@@ -263,6 +325,14 @@ function applyLiveEvent(event: AgentEvent, setters: LiveSetters): void {
           content: event.output,
         } satisfies ChatMessage,
       ]);
+      break;
+    // M12: a real, awaited approval. Show the Allow/Deny control on request;
+    // clear it when the loop reports the resolution.
+    case "approval.requested":
+      setters.setApproval(event);
+      break;
+    case "approval.resolved":
+      setters.setApproval(null);
       break;
     default:
       break;

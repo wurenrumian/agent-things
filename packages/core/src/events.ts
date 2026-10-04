@@ -55,6 +55,30 @@ export type AgentEvent =
       reason: string;
       at: number;
     }
+  /**
+   * M12 interactive approval (additive). Emitted by the loop **only** when a
+   * gate returns `ask` *and* `AgentConfig.approvals` is configured. The loop
+   * pauses between these two events while the human decides: `requested`
+   * carries the call being gated, `resolved` carries the verdict. On the
+   * unconfigured path (no `approvals`) neither event is ever emitted, so every
+   * existing experiment stays byte-for-byte unchanged.
+   */
+  | {
+      type: "approval.requested";
+      toolCallId: string;
+      name: string;
+      input: Record<string, unknown>;
+      turnId: string;
+      reason: string;
+      at: number;
+    }
+  | {
+      type: "approval.resolved";
+      toolCallId: string;
+      decision: "allow" | "deny";
+      reason?: string;
+      at: number;
+    }
   | {
       type: "tool.call";
       toolCallId: string;

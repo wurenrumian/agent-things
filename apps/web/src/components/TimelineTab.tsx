@@ -89,6 +89,11 @@ function summarize(event: AgentEvent): string {
             : ` — ${truncate(JSON.stringify(event.result))}`;
       return `${event.status} · ${event.name} (${event.kind}, run ${event.run})${detail}`;
     }
+    // M12 interactive approval (additive).
+    case "approval.requested":
+      return `ASK ${event.name} — ${event.reason} (awaiting human)`;
+    case "approval.resolved":
+      return `${event.decision}${event.reason ? ` — ${event.reason}` : ""}`;
     case "turn.end":
       return event.error ? `${event.reason}: ${event.error}` : event.reason;
     default:

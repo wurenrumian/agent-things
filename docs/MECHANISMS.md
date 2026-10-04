@@ -30,7 +30,7 @@
 | L3 | 压缩 / tool-result clearing / memory | 压缩时保什么、缓存怎么处理 | M3 |
 | L4 | skill（渐进披露） | 取 skill 正文为何不重写前缀 | M2 |
 | L4 | MCP（tool/resource/prompt） | 工具 schema 何时注入、顺序为何有害 | M4 |
-| L4 | hooks / slash commands | 生命周期注入点在哪 | M6 |
+| L4 | hooks / slash commands | 生命周期注入点在哪 | M6 ✅ / M12 ✅ |
 | L5 | subagent / 多 agent | 隔离上下文 + 结果回灌的成本模型 | M5 |
 | L5 | background / scheduled | 非阻塞执行与定时触发 | M7 |
 | L6 | session / fork / checkpoint | 会话边界、代码回滚与对话回滚解耦 | M6 |
@@ -131,7 +131,8 @@ cache creation 的 0.76%"**；压缩后，attachment builders 会**重新宣告�
 | background/scheduled | 非阻塞执行如何不污染主 turn；定时触发的状态从哪读 |
 | checkpoint/fork | 对话回滚与代码回滚为何解耦；fork 后缓存怎么算 |
 | hooks | PreToolUse / PostToolUse / PreCompact 的拦截语义 |
-| 权限 | 裁决发生在工具执行前的哪一层；拒绝如何回灌给模型 |
+| 权限 / 审批 | 裁决发生在工具执行前的哪一层；`ask` 如何变成被 await 的人机决策（M12） |
+| slash commands | 命令是输入预处理还是模型能力；注入点在前缀还是尾部（M12） |
 | 观测台 | 哪些事件足以重建"模型看到了什么" |
 
 ## 6. 待验证问题清单（本项目的产出）
@@ -230,3 +231,18 @@ N=25 个真实工具下，常驻前缀 **4777 → 3100（−1677，−35.1%）**
 稳定命中（eager 峰值 99.1% / lazy 98.1%）；lazy 任务总 token **−41.3%**、成本
 +9%（多一次 `tool_search` 往返）。索引确定性（原序 vs 反转序逐字节相同）PASS。
 结论：工具多、单轮只用少数且会话较长时走 lazy；否则 eager 更直接。
+
+### M12 交互式审批 + 斜杠命令 — 详见 [`runs/m12.md`](runs/m12.md)
+
+`ask` 从"乐观放行/阻断"升级为**被 await 的真实决策**：gate 判 `ask` 时发
+`approval.requested`、阻塞在 `AgentConfig.approvals` 回调、发 `approval.resolved`
+后执行或回灌拒绝。真实模型实验：deny 腿事件序列
+`tool.call → permission.decision → approval.requested → approval.resolved`（无
+`tool.result`，文件不生成）；allow 腿同序再 `tool.result`，文件字节
+`M12-ALLOW-…`（14B，sha256 `f493a861…`）。回调里 `sleep(250ms)` ⇒ 两次
+`Δ≈263ms`，**证明循环确实停在 promise 上**。服务器：`POST …/approvals`
+（404/409/400）+ `APPROVAL_TIMEOUT_MS`（实测 ~1513ms 超时 resolve `deny`，文件不生成）。
+斜杠命令 `/help` `/memory` `/workers` `/compact` 命中时**零模型 turn**（SSE 仅
+`mechanism(command)+assistant.message+turn.end`）；`/etc/hosts`、`/foo` 非命令，原样
+进模型（`context.compiled`）。两条路径都只**追加**消息，未配置路径与 master 逐字节一致；
+无新依赖。

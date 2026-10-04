@@ -92,6 +92,33 @@ export function compactSession(id: string): Promise<CompactionResult> {
   );
 }
 
+export interface ApprovalResolution {
+  ok: boolean;
+  toolCallId: string;
+  decision: "allow" | "deny";
+}
+
+/**
+ * M12: resolve a pending interactive approval. The turn's SSE stream is
+ * suspended on the server until this POST arrives (or the server's timeout
+ * resolves `deny`).
+ */
+export function resolveApproval(
+  sessionId: string,
+  toolCallId: string,
+  decision: "allow" | "deny",
+  reason?: string,
+): Promise<ApprovalResolution> {
+  return request<ApprovalResolution>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/approvals`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(reason ? { toolCallId, decision, reason } : { toolCallId, decision }),
+    },
+  );
+}
+
 export interface StreamHandlers {
   onEvent: (event: AgentEvent) => void;
   onError?: (error: Error) => void;
