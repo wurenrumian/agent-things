@@ -1234,3 +1234,173 @@ button {
 .diff-ctx {
   color: var(--text-dim);
 }
+
+/* ---- L1 cache-forensics view ---- */
+
+.fx-intro {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.fx-intro code {
+  font-family: var(--mono);
+  color: var(--text);
+  background: var(--bg-elev-2);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+.fx-card {
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  overflow: hidden;
+}
+
+.fx-card-ok {
+  border-left-color: var(--green);
+}
+
+.fx-card-changed {
+  border-left-color: var(--amber);
+}
+
+.fx-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg-elev-2);
+}
+
+.fx-pair {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.fx-time {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.fx-verdict {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.fx-verdict-none {
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.fx-verdict-system,
+.fx-verdict-tools,
+.fx-verdict-messages {
+  color: var(--amber);
+  background: rgba(210, 153, 34, 0.14);
+}
+
+.fx-body {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fx-blocks {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.fx-block {
+  padding: 2px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--border-soft);
+  color: var(--text-dim);
+  background: var(--bg);
+}
+
+.fx-block-divergent {
+  color: #fff;
+  border-color: var(--amber);
+  background: rgba(210, 153, 34, 0.35);
+  font-weight: 600;
+  box-shadow: 0 0 0 1px rgba(210, 153, 34, 0.4);
+}
+
+.fx-block-mark {
+  margin-right: 4px;
+}
+
+.fx-arrow {
+  color: var(--text-faint);
+}
+
+.fx-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.fx-detail-line {
+  display: flex;
+  gap: 8px;
+  color: var(--text-dim);
+}
+
+.fx-detail-changed {
+  color: var(--amber);
+}
+
+.fx-detail-label {
+  width: 64px;
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+
+.fx-cache {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border-soft);
+}
+
+.fx-cache-stat {
+  display: flex;
+  flex-direction: column;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.fx-cache-label {
+  font-size: 10px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.fx-cache-hit .fx-cache-value {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.fx-prompt {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
