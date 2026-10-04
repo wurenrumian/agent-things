@@ -4,9 +4,11 @@ import { RequestTab } from "./RequestTab";
 import { UsageTab } from "./UsageTab";
 import { TimelineTab } from "./TimelineTab";
 import { DiffTab, collectDiffs } from "./DiffTab";
+import { ForensicsTab } from "./ForensicsTab";
+import { collectForensics } from "../forensics";
 import type { AgentEvent, Mechanisms } from "../types";
 
-type TabId = "context" | "request" | "usage" | "timeline" | "diff";
+type TabId = "context" | "request" | "usage" | "timeline" | "diff" | "forensics";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "context", label: "Context" },
@@ -31,10 +33,14 @@ export function Observatory({ events, mechanisms }: ObservatoryProps) {
   const requestEvent = useMemo(() => lastOfType(events, "request.sent"), [events]);
   const usageCount = events.filter((e) => e.type === "usage").length;
   const diffCount = useMemo(() => collectDiffs(events).length, [events]);
+  const forensics = useMemo(() => collectForensics(events), [events]);
 
   // The Diff tab only appears once a write turn has produced a patch, so a
-  // read-only session looks exactly as it did before M8.
-  const tabs = diffCount > 0 ? [...TABS, { id: "diff" as const, label: "Diff" }] : TABS;
+  // read-only session looks exactly as it did before M8. Forensics appears as
+  // soon as a second request exists to diff against.
+  const tabs: { id: TabId; label: string }[] = [...TABS];
+  if (diffCount > 0) tabs.push({ id: "diff", label: "Diff" });
+  if (forensics.requestCount >= 2) tabs.push({ id: "forensics", label: "Forensics" });
 
   return (
     <section className="observatory">
@@ -59,6 +65,9 @@ export function Observatory({ events, mechanisms }: ObservatoryProps) {
             {id === "diff" && diffCount > 0 && (
               <span className="tab-count">{diffCount}</span>
             )}
+            {id === "forensics" && forensics.pairs.length > 0 && (
+              <span className="tab-count">{forensics.pairs.length}</span>
+            )}
           </button>
         ))}
       </nav>
@@ -69,6 +78,7 @@ export function Observatory({ events, mechanisms }: ObservatoryProps) {
         {tab === "usage" && <UsageTab events={events} />}
         {tab === "timeline" && <TimelineTab events={events} />}
         {tab === "diff" && <DiffTab events={events} />}
+        {tab === "forensics" && <ForensicsTab events={events} />}
       </div>
     </section>
   );
