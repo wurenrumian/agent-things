@@ -7,9 +7,11 @@
 compaction / MCP / session / 权限等机制）。重点不是"再造一个 agent"，而是**把
 那些平时说不清楚的机制，用真实 API 的用量数据讲明白**。
 
-> 状态：**M0–M8 全部完成**（含 INT-A/B1/B2 三个整合阶段）。`pnpm typecheck`
+> 状态：**M0–M8 全部完成**（含 INT-A/B1/B2 三个整合阶段）；**v2（M9 memory /
+> M10 orchestrator / M11 tool-search）已由 INT-C 接进 server + web**。`pnpm typecheck`
 > 覆盖 core / server / web / cli，web 可构建。进度见 [`docs/ROADMAP.md`](docs/ROADMAP.md)，
-> 协调者交接见 [`docs/STATE.md`](docs/STATE.md)。
+> 协调者交接见 [`docs/STATE.md`](docs/STATE.md)，整合证据见
+> [`docs/runs/int-c.md`](docs/runs/int-c.md)。
 
 ## 文档
 
@@ -28,7 +30,8 @@ compaction / MCP / session / 权限等机制）。重点不是"再造一个 agen
 
 ```
 packages/core    内核：类型、事件、OpenRouter 客户端、上下文装配、工具、循环、存储
-                 ＋ mechanisms/{skills,mcp,subagent,compaction,hooks,checkpoint,scheduler}
+                 ＋ mechanisms/{skills,mcp,subagent,compaction,hooks,checkpoint,scheduler,
+                   memory,orchestrator,tool-search}
 packages/server  HTTP + SSE，把内核包成服务（组装根 compose.ts、契约路由）
 packages/cli     agent-things 命令行：同一个内核的第二个消费者
 apps/web         上下文观测台（Vite + React；Timeline / Context / Usage / Diff …）
@@ -66,6 +69,9 @@ pnpm --filter @agent/cli exec tsx src/index.ts --help
 | compaction 压缩与回收 | `COMPACT_THRESHOLD_TOKENS` 等 | [compaction.md](docs/mechanisms/compaction.md) · [run](docs/runs/m3-compaction.md) |
 | 权限 / hooks / checkpoint | `HOOKS_FILE` `POLICY_FILE` `CHECKPOINT_DIR` | [permissions.md](docs/mechanisms/permissions.md) · [run](docs/runs/m6-permissions.md) |
 | background / scheduled | `SCHEDULER_ENABLED` | [scheduler.md](docs/mechanisms/scheduler.md) · [run](docs/runs/m7-scheduler.md) |
+| memory 跨会话记忆 | `MEMORY_ENABLED` `MEMORY_DIR` `MEMORY_SYSTEM_INJECT` | [run](docs/runs/m9-memory.md) · INT-C |
+| orchestrator 多 worker | `ORCHESTRATOR_ENABLED` `ORCHESTRATOR_MAX_WORKERS` | [mechanism](docs/mechanisms/orchestrator.md) · [run](docs/runs/m10-orchestrator.md) · INT-C |
+| lazy tool exposure | `TOOL_SEARCH_ENABLED` | [run](docs/runs/m11-tool-search.md) · INT-C |
 
 ## 设计原则（摘要）
 

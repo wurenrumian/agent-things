@@ -199,3 +199,34 @@ Scheduler / `runInBackground` / 结果回灌；全部断言通过。**实现类�
 
 委派把父上下文最终 `prompt_tokens` **9420 → 858（−90.9%）**；总 token +15.5%、
 成本 +18.8%。隔离用"总 token 略增"换取"主上下文大幅缩小"。
+
+### M9 记忆（memory）— 详见 [`runs/m9-memory.md`](runs/m9-memory.md)
+
+跨会话：会话 A 经 `memory` 工具存 3 条事实后，全新的会话 B（另一个 `Agent`、
+空历史、只共享磁盘目录）调用 `memory search` 答出 `"Blue Lantern"`——该字符串只
+存在于 A 写入的 NDJSON 里。缓存注入位置（同一 437-char 记忆块、每型 3 次相同请求）：
+
+| 注入位置 | 相对预热 cached | 判定 |
+|---|---|---|
+| system 前缀**内部**（改写） | 3648 → **0**（inject#1） | 前缀全失效，付一次全量 re-warm |
+| 消息数组**尾部**（tool result） | 3584 → **3584**（逐字节不变） | 前缀保留，只新增尾部未命中 |
+
+结论：**改记忆不必然炸缓存**，只取决于注入位置；检索结果一律作为尾部 tool result。
+`pnpm typecheck` 全绿；共 14 次 API 调用。
+
+### M10 orchestrator — 详见 [`runs/m10-orchestrator.md`](runs/m10-orchestrator.md)
+
+Run B（3 个读大文件微任务）：coordinator 主上下文 `prompt_tokens` **8793 → 1926
+（−78.1%）**，答案完全一致；全链路总 token 9829 → 21970（**+123%**）、成本
+$0.001190 → $0.002615（**+120%**）。Run A 小任务反例：coordinator 1386 → 1907
+（**+37.6%**）——隔离只有在"原始输出 ≫ worker 固定开销"时才划算。question/reply/ack
+实录显示 worker `blocked → running` 的恢复点；未 ack 投递重放 7/7 断言通过（0 次
+API）；5 个 session id 互不相同、无跨上下文泄漏。单次完整运行约 16 次调用。
+
+### M11 惰性工具暴露（tool-search）— 详见 [`runs/m11-tool-search.md`](runs/m11-tool-search.md)
+
+N=25 个真实工具下，常驻前缀 **4777 → 3100（−1677，−35.1%）**，边际 ≈73 token/工具
+（按 M4 的 ~165 token/工具外推，真实 MCP 工具节省更大）。请求一字未改时两模式都能
+稳定命中（eager 峰值 99.1% / lazy 98.1%）；lazy 任务总 token **−41.3%**、成本
++9%（多一次 `tool_search` 往返）。索引确定性（原序 vs 反转序逐字节相同）PASS。
+结论：工具多、单轮只用少数且会话较长时走 lazy；否则 eager 更直接。

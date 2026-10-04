@@ -103,6 +103,18 @@ export interface ServerConfig {
   checkpointDir: string;
   /** Whether the M7 scheduler is enabled (`SCHEDULER_ENABLED`, default `true`). */
   schedulerEnabled: boolean;
+  /** Whether M9 memory is enabled (`MEMORY_ENABLED`, default `false`). */
+  memoryEnabled: boolean;
+  /** Absolute directory for the M9 memory NDJSON log (`MEMORY_DIR`). */
+  memoryDir: string;
+  /** Whether to append the memory block to the system prompt (`MEMORY_SYSTEM_INJECT`). */
+  memorySystemInject: boolean;
+  /** Whether M10 orchestrator tools are registered (`ORCHESTRATOR_ENABLED`). */
+  orchestratorEnabled: boolean;
+  /** Default worker spawn ceiling (`ORCHESTRATOR_MAX_WORKERS`, default `4`). */
+  orchestratorMaxWorkers: number;
+  /** Whether M11 lazy tool exposure is enabled (`TOOL_SEARCH_ENABLED`). */
+  toolSearchEnabled: boolean;
 }
 
 /** Summary placement, mirroring the compaction mechanism's union. */
@@ -291,6 +303,34 @@ export function loadConfig(): ServerConfig {
       process.env["SCHEDULER_ENABLED"],
       true,
       "SCHEDULER_ENABLED",
+    ),
+    memoryEnabled: parseBool(
+      process.env["MEMORY_ENABLED"],
+      false,
+      "MEMORY_ENABLED",
+    ),
+    memoryDir: process.env["MEMORY_DIR"]
+      ? path.resolve(repoRoot, process.env["MEMORY_DIR"])
+      : path.join(dataDir, "memory"),
+    memorySystemInject: parseBool(
+      process.env["MEMORY_SYSTEM_INJECT"],
+      false,
+      "MEMORY_SYSTEM_INJECT",
+    ),
+    orchestratorEnabled: parseBool(
+      process.env["ORCHESTRATOR_ENABLED"],
+      false,
+      "ORCHESTRATOR_ENABLED",
+    ),
+    orchestratorMaxWorkers: parsePositiveInt(
+      process.env["ORCHESTRATOR_MAX_WORKERS"],
+      4,
+      "ORCHESTRATOR_MAX_WORKERS",
+    ),
+    toolSearchEnabled: parseBool(
+      process.env["TOOL_SEARCH_ENABLED"],
+      false,
+      "TOOL_SEARCH_ENABLED",
     ),
   };
 }

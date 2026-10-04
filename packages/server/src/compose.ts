@@ -1,6 +1,7 @@
 import {
   OpenRouterClient,
   ToolRegistry,
+  buildSystemPrompt,
   builtinTools,
   messageText,
   unifiedDiff,
@@ -36,6 +37,17 @@ import {
 import { compactDetailed } from "../../core/src/mechanisms/compaction/index.js";
 import { CheckpointStore } from "../../core/src/mechanisms/checkpoint/index.js";
 import { Scheduler } from "../../core/src/mechanisms/scheduler/index.js";
+import {
+  MemoryStore,
+  createMemoryTool,
+  memorySystemSuffix,
+  type MemoryEntry,
+} from "../../core/src/mechanisms/memory/index.js";
+import {
+  Supervisor,
+  createOrchestratorTools,
+} from "../../core/src/mechanisms/orchestrator/index.js";
+import { createToolSearchRegistry } from "../../core/src/mechanisms/tool-search/index.js";
 
 /**
  * Composition root (the "L8" wiring step).
@@ -67,6 +79,20 @@ export interface ComposedAgent {
   checkpoints: CheckpointStore;
   /** Background/scheduled task runner (M7), unless `SCHEDULER_ENABLED=false`. */
   scheduler?: Scheduler;
+  /**
+   * M9 memory read-out (present only when `MEMORY_ENABLED=true`). `dir` is the
+   * store directory; `count` and `entries` are **live getters**, so they reflect
+   * facts the `memory` tool saved during the current process lifetime.
+   */
+  memories?: {
+    dir: string;
+    count: number;
+    entries: MemoryEntry[];
+    /** Whether the memory block is also injected into the system prompt. */
+    systemInject: boolean;
+  };
+  /** M10 orchestrator supervisor (present only when `ORCHESTRATOR_ENABLED=true`). */
+  supervisor?: Supervisor;
   /** Close every connected MCP stdio client. Safe to call more than once. */
   close(): void;
 }
@@ -432,15 +458,112 @@ export async function composeAgent(config: ServerConfig): Promise<ComposedAgent>
   };
   tools.register(task);
 
+  /* ---------------------------------------------------------------- memory (M9) */
+
+  // `memories` is a live read-out: `count`/`entries` are getters closing over the
+  // store, so a `memory` tool `save` during a turn is immediately visible to
+  // `GET /api/memories`. `systemInject` mirrors `MEMORY_SYSTEM_INJECT`.
+  let memoryStore: MemoryStore | undefined;
+  let memoryReadout: ComposedAgent["memories"];
+  if (config.memoryEnabled) {
+    const store = await MemoryStore.open(config.memoryDir);
+    memoryStore = store;
+    tools.register(
+      observable(createMemoryTool(store), "memory", (input, result) => ({
+        phase: result.isError ? "error" : "called",
+        data: {
+          action:
+            typeof input["action"] === "string" ? input["action"] : undefined,
+          count: store.size(),
+        },
+      })),
+    );
+    memoryReadout = {
+      dir: store.dir(),
+      get count() {
+        return store.size();
+      },
+      get entries() {
+        return store.all();
+      },
+      systemInject: config.memorySystemInject,
+    };
+    console.log(
+      `[server] memory: enabled (dir=${config.memoryDir}, ` +
+        `entries=${store.size()}, systemInject=${config.memorySystemInject})`,
+    );
+  } else {
+    console.log("[server] memory: disabled (MEMORY_ENABLED unset/false)");
+  }
+
+  /* ---------------------------------------------------------- orchestrator (M10) */
+
+  let supervisor: Supervisor | undefined;
+  if (config.orchestratorEnabled) {
+    supervisor = new Supervisor({
+      client,
+      model: config.model,
+      cwd: config.cwd,
+      permissionMode: config.permissionMode,
+      maxSteps: config.subagentMaxSteps,
+      // Minimal observability: worker messages are normally consumed by the
+      // coordinator's `wait_for` tool during a turn. Anything left unacked is
+      // visible through `GET /api/workers` (registry + pending mailbox). We do
+      // NOT re-inject into a session here because the supervisor is not bound to
+      // one session (unlike the M7 scheduler); see `docs/runs/int-c.md`.
+      onMessage: (message) => {
+        console.log(
+          `[server] worker message: ${message.type} from=${message.from}` +
+            (message.subject ? ` subject="${message.subject}"` : ""),
+        );
+      },
+    });
+    for (const tool of createOrchestratorTools(supervisor)) {
+      const wrapped =
+        tool.name === "spawn_worker"
+          ? limitedSpawns(tool, supervisor, config.orchestratorMaxWorkers)
+          : tool;
+      tools.register(
+        observable(wrapped, "orchestrator", (_input, result) => ({
+          phase: wrapped.name,
+          data: result.isError ? { error: true } : { tool: wrapped.name },
+        })),
+      );
+    }
+    console.log(
+      `[server] orchestrator: enabled (maxWorkers=${config.orchestratorMaxWorkers})`,
+    );
+  } else {
+    console.log(
+      "[server] orchestrator: disabled (ORCHESTRATOR_ENABLED unset/false)",
+    );
+  }
+
+  /* ---------------------------------------------------------- tool-search (M11) */
+
   console.log(
     `[server] tools (${tools.list().length}): ` +
       `${tools.list().map((t) => t.name).join(", ")}`,
   );
 
+  // M11: expose the *fully built* registry through the two-tool facade. Wrapping
+  // last means every mechanism wired above is still discoverable via
+  // `tool_search`/`tool_call`, while the parent Agent's prefix only carries those
+  // two schemas. Caveat: the facade's own `readOnly:false` drives the permission
+  // layer, so a per-tool gate must resolve the inner tool (mechanism doc).
+  let exposedTools = tools;
+  if (config.toolSearchEnabled) {
+    exposedTools = createToolSearchRegistry(tools);
+    console.log(
+      `[server] tool-search: enabled (${tools.list().length} real tools ` +
+        `behind ${exposedTools.list().map((t) => t.name).join(", ")})`,
+    );
+  }
+
   const agentConfig: AgentConfig = {
     client,
     model: config.model,
-    tools,
+    tools: exposedTools,
     cwd: config.cwd,
     permissionMode: config.permissionMode,
   };
@@ -449,6 +572,20 @@ export async function composeAgent(config: ServerConfig): Promise<ComposedAgent>
   if (compaction) agentConfig.compaction = compaction;
   agentConfig.checkpoints = checkpoints;
 
+  // M9 optional system-prompt injection. The base must be assembled explicitly
+  // because appending a suffix requires a full `systemPromptOverride` (the loop
+  // otherwise builds the prompt itself). Cache caveat: appending at the very END
+  // is the append-only-safe position (M2 §c′ / M9 §4), but this block is frozen
+  // at boot and re-writes as memories accumulate across restarts; off by default.
+  if (memoryStore && config.memorySystemInject) {
+    const suffix = memorySystemSuffix(memoryStore.all());
+    const base = await buildSystemPrompt({ cwd: config.cwd });
+    agentConfig.systemPromptOverride = base.text + suffix;
+    console.log(
+      `[server] memory: system injection on (suffix chars=${suffix.length})`,
+    );
+  }
+
   let closed = false;
   return {
     agentConfig,
@@ -456,6 +593,8 @@ export async function composeAgent(config: ServerConfig): Promise<ComposedAgent>
     mcpServers,
     checkpoints,
     scheduler,
+    memories: memoryReadout,
+    supervisor,
     close() {
       if (closed) return;
       closed = true;
@@ -463,6 +602,44 @@ export async function composeAgent(config: ServerConfig): Promise<ComposedAgent>
       // Stop timers and cancel in-flight scheduled work; fire-and-forget since
       // the process is on its way out.
       void scheduler?.shutdown();
+      // Abort active workers and drop mailbox waiters so their timers do not
+      // keep the event loop alive.
+      void supervisor?.stopAll();
+      supervisor?.dispose();
+    },
+  };
+}
+
+/**
+ * M10: cap concurrent active workers at `ORCHESTRATOR_MAX_WORKERS`. We wrap the
+ * mechanism's `spawn_worker` tool (rather than editing the mechanism directory),
+ * so the limit is enforced host-side and observable as a tool error.
+ */
+function limitedSpawns(
+  tool: ToolDef,
+  supervisor: Supervisor,
+  max: number,
+): ToolDef {
+  return {
+    ...tool,
+    async execute(input, ctx) {
+      const active = supervisor.registry
+        .list()
+        .filter(
+          (worker) =>
+            worker.status === "starting" ||
+            worker.status === "running" ||
+            worker.status === "blocked",
+        ).length;
+      if (active >= max) {
+        return {
+          output:
+            `orchestrator: ${active} worker(s) already active ` +
+            `(ORCHESTRATOR_MAX_WORKERS=${max}); wait for one to finish.`,
+          isError: true,
+        };
+      }
+      return tool.execute(input, ctx);
     },
   };
 }

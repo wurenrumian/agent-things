@@ -1,6 +1,6 @@
 # STATE — coordinator handoff / resume notes
 
-> 这份文件供**上下文压缩后**的协调者快速恢复。最后更新：2026-10-03。
+> 这份文件供**上下文压缩后**的协调者快速恢复。最后更新：2026-10-04。
 
 ## 1. 这个项目是什么
 
@@ -81,10 +81,29 @@ pnpm monorepo（`packages/core` 内核 + `packages/server` HTTP/SSE + `apps/web`
 - 复验（master）：CLI `--help` 正常；fork 路由新建会话 + 404；5 包 typecheck + web build 绿。
   证据 `docs/runs/m8.md`。
 
+**v2 / wave-3（M9 memory、M10 orchestrator、M11 tool-search）** — 三个机制各自自包含
+在 `packages/core/src/mechanisms/<name>/`（提交 `1c04efe` / `392888f` / `8eac7ab`），
+零共享文件改动。**INT-C**（单 worker 整合波次）把它们接进 server/web：
+- `config.ts`：`MEMORY_ENABLED` / `MEMORY_DIR` / `MEMORY_SYSTEM_INJECT`、
+  `ORCHESTRATOR_ENABLED` / `ORCHESTRATOR_MAX_WORKERS`、`TOOL_SEARCH_ENABLED`。
+- `compose.ts`：memory 打开 `MemoryStore` + 注册 `memory` 工具（可选 system 尾部注入）；
+  orchestrator 建 `Supervisor` + 注册 5 个编排工具（宿主侧 `ORCHESTRATOR_MAX_WORKERS` 限流）；
+  tool-search 最后包裹**完整** registry（父 Agent 只见 `tool_call`/`tool_search`）。
+- `index.ts`：`GET /api/memories`、`GET /api/workers`；`GET /api/mechanisms` 增加
+  `memory`/`orchestrator`/`toolSearch` 状态。
+- 不变式：全部新 env 未设置时行为逐字节不变（tools 仍是 6 个 builtin + task）。
+- 验收（`docs/runs/int-c.md`）：typecheck + web build 绿；flags off/on 均可启动；
+  真实 turn 调用 `memory` 后 `GET /api/memories` 返回该条目；`GET /api/workers`
+  返回 supervisor 快照；`TOOL_SEARCH_ENABLED=true` 时 `/api/config` 只列
+  `tool_call` + `tool_search`。**未新增依赖**。
+
 ## 6. 状态：**全部里程碑完成** 🎉（已打 tag `v1`）
 
 M0–M8 与 INT-A/B1/B2 全部合入 `master`，`pnpm typecheck`（core/server/web/cli）+ web build 全绿。
 `README.md` 已更新到 v1。
+
+**v2 进展**：M9/M10/M11 三个机制已合入 `master`；**INT-C 已把三者接进 server + web
+并回填文档**（见 §5 与 `docs/runs/int-c.md`）。`MECHANISMS.md §7` 已补 M9/M10/M11 实测。
 
 可选后续（非里程碑）：
 1. 把 M2–M7 的机制在 web 观测台做成**专面板**（目前主要是 Timeline + Mechanisms 条带 + Diff）。

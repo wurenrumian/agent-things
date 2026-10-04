@@ -21,7 +21,9 @@ All responses JSON unless noted. Errors: `{ "error": string }` with status.
 |---|---|---|---|
 | GET | `/api/health` | — | `{ ok: true, model: string }` |
 | GET | `/api/config` | — | `{ model, cwd, permissionMode, tools: string[] }` |
-| GET | `/api/mechanisms` | — | `{ skills: string[], mcpServers: string[], tools: string[] }` |
+| GET | `/api/mechanisms` | — | `{ skills: string[], mcpServers: string[], tools: string[], memory: { enabled, dir?, count?, systemInject? }, orchestrator: { enabled, workers }, toolSearch: { enabled } }` |
+| GET | `/api/memories` | — | `{ enabled:true, dir, count, systemInject, entries }` or `{ enabled:false }` (M9) |
+| GET | `/api/workers` | — | `{ enabled:true, coordinatorId, workers, reports, usage, pending }` or `{ enabled:false }` (M10) |
 | GET | `/api/sessions` | — | `SessionMeta[]` |
 | POST | `/api/sessions` | `{ title?: string }` | `SessionMeta` |
 | POST | `/api/sessions/:id/fork` | `{ atMessageIndex?, title? }` | `SessionMeta` |
@@ -160,6 +162,44 @@ event log and the web Timeline):
 settlement also appends a re-injected `role:"user"` message to the session (see
 `reinjectTaskOutcome`), which is how the model next sees the outcome.
 
+**M9 memory (additive).** With `MEMORY_ENABLED=true` the composition root opens
+a `MemoryStore` at `MEMORY_DIR` and registers exactly one `memory` tool
+(`save`/`list`/`search`/`forget`). Its output is a **tool result at the tail** of
+the message array, so recalling a memory never rewrites the system prefix (the
+M9 cache measurement). `GET /api/memories` returns the live read-out
+`{ enabled:true, dir, count, systemInject, entries }`; `entries` is a copy of the
+store's live entries, so a `save` during a turn is visible immediately. When
+`MEMORY_ENABLED` is unset the route returns `{ enabled:false }` and no `memory`
+tool is registered (behaviour unchanged). `MEMORY_SYSTEM_INJECT=true` (only
+meaningful with memory enabled) additionally appends
+`memorySystemSuffix(store.all())` to the **end** of the assembled system prompt
+via `systemPromptOverride`; the block is frozen at boot, and appending at the
+tail is the append-only-safe position (M2 §c′ / M9 §4).
+
+**M10 orchestrator (additive).** With `ORCHESTRATOR_ENABLED=true` the
+composition root creates a `Supervisor` and registers its five coordinator tools
+(`spawn_worker`, `wait_for`, `send_message`, `list_workers`, `stop_worker`).
+`ORCHESTRATOR_MAX_WORKERS` (default `4`) caps how many workers may be active at
+once; the host wraps `spawn_worker` and returns a tool error past the cap.
+`GET /api/workers` returns `{ enabled:true, coordinatorId, workers, reports,
+usage, pending }` where `workers` is the registry's status-transition log,
+`reports`/`usage` are the per-worker token ledger, and `pending` is the unacked
+mailbox tail. When unset the route returns `{ enabled:false }` and no
+orchestrator tools are registered. Worker messages are consumed in-turn by
+`wait_for`; anything not consumed is observable through `GET /api/workers` (the
+supervisor is not bound to one session, so this wave does not re-inject into a
+session log).
+
+**M11 lazy tool exposure (additive).** With `TOOL_SEARCH_ENABLED=true` the
+composition root wraps the **fully built** final `ToolRegistry` with
+`createToolSearchRegistry(realRegistry)`, so the parent `Agent` sees only
+`tool_call` and `tool_search` while every real tool (builtins, `use_skill`,
+MCP, `task`, `memory`, orchestrator) stays callable through the facade.
+`GET /api/config` therefore lists exactly those two names. Caveat: the facade's
+own `readOnly:false` drives the permission layer, so a per-tool gate should
+resolve the inner tool rather than gate the facade (mechanism doc). When unset
+the real registry is exposed unchanged.
+
 ## Config (server, from env)
 
 Read from repo-root `.env` (do not add a dotenv dependency; write a tiny loader).
@@ -197,6 +237,21 @@ Read from repo-root `.env` (do not add a dotenv dependency; write a tiny loader)
   snapshotting only occurs for `write_file`/`edit_file`.
 - `SCHEDULER_ENABLED` (`true` | `false`, default `true`). When `false`,
   `POST …/schedule` returns `409` and `GET …/tasks` is empty.
+- `MEMORY_ENABLED` (`true` | `false`, default `false`). When `true`, opens the
+  M9 `MemoryStore` at `MEMORY_DIR` and registers the `memory` tool; exposes
+  `GET /api/memories`.
+- `MEMORY_DIR` (directory for the M9 NDJSON log; default `${DATA_DIR}/memory`).
+- `MEMORY_SYSTEM_INJECT` (`true` | `false`, default `false`). When `true` (and
+  memory is enabled), appends the memory block to the **end** of the system
+  prompt via `systemPromptOverride` (frozen at boot; see M9 note above).
+- `ORCHESTRATOR_ENABLED` (`true` | `false`, default `false`). When `true`,
+  creates the M10 `Supervisor` and registers the five coordinator tools;
+  exposes `GET /api/workers`.
+- `ORCHESTRATOR_MAX_WORKERS` (positive integer, default `4`): cap on concurrent
+  active workers; `spawn_worker` errors past the cap.
+- `TOOL_SEARCH_ENABLED` (`true` | `false`, default `false`). When `true`, wraps
+  the final registry in the M11 two-tool facade, so `GET /api/config` lists only
+  `tool_call` + `tool_search`.
 
 ## Web app (Vite + React + TS, dev port 5173)
 
