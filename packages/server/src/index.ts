@@ -1,4 +1,5 @@
 import { serve } from "@hono/node-server";
+import path from "node:path";
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE, type SSEStreamingApi } from "hono/streaming";
@@ -27,6 +28,8 @@ import {
   parseCommand,
   registerBuiltins,
 } from "../../core/src/mechanisms/commands/index.js";
+import { LABS, findLab } from "./labs/registry.js";
+import { LabBusyError, LabRunner } from "./labs/runner.js";
 
 /**
  * HTTP + SSE shell around the `@agent/core` kernel (the "L8" layer).
@@ -63,6 +66,8 @@ interface Runtime {
    * up and resolves it; a per-request timeout resolves `deny` and clears it.
    */
   approvals: Map<string, (decision: "allow" | "deny", reason?: string) => void>;
+  /** L3 / Labs: runs exactly one experiment at a time (the 409-busy gate). */
+  labRunner: LabRunner;
   /** Tear down long-lived mechanism resources (MCP stdio children). */
   close: () => void;
 }
@@ -85,6 +90,7 @@ async function createRuntime(config: ServerConfig): Promise<Runtime> {
     mcpServers: composed.mcpServers,
     toolSearchEnabled: config.toolSearchEnabled,
     approvals: new Map(),
+    labRunner: new LabRunner(),
     close: composed.close,
   };
 
@@ -320,6 +326,81 @@ function buildApp(rt: Runtime): Hono {
       reports: supervisor.reports(),
       usage: supervisor.usage(),
       pending: supervisor.mailbox.pending(),
+    });
+  });
+
+  /**
+   * L3 / Labs: the experiments catalog. The registry is the allowlist and is
+   * read-only. When `LABS_ENABLED=false` the route reports the flag rather than
+   * a catalog, so the client can disable the tab without a second request.
+   */
+  app.get("/api/labs", (c) =>
+    c.json(
+      rt.config.labsEnabled
+        ? { enabled: true, labs: LABS }
+        : { enabled: false, labs: [] },
+    ),
+  );
+
+  /**
+   * L3 / Labs: run one allowlisted experiment and stream its output as SSE.
+   * `404` for an unknown id, `403` when labs are disabled, `409` when another
+   * lab is already running. The slot is reserved *before* the stream opens, so
+   * a concurrent request gets a real `409` JSON response rather than an empty
+   * stream. The run inherits `process.env`, so the repo-root `.env` reaches API
+   * labs; `rt.config.labTimeoutMs` bounds each run and a client disconnect
+   * kills the process tree via `c.req.raw.signal`.
+   */
+  app.post("/api/labs/:id/run", (c) => {
+    if (!rt.config.labsEnabled) {
+      return c.json({ error: "labs are disabled (LABS_ENABLED=false)" }, 403);
+    }
+    const id = c.req.param("id");
+    const lab = findLab(id);
+    if (!lab) return c.json({ error: "lab not found" }, 404);
+
+    let release: () => void;
+    try {
+      release = rt.labRunner.acquire();
+    } catch (err) {
+      if (err instanceof LabBusyError) {
+        return c.json({ error: "busy", message: err.message }, 409);
+      }
+      throw err;
+    }
+
+    const scriptPath = path.join(
+      rt.config.repoRoot,
+      "packages",
+      "server",
+      "scripts",
+      lab.script,
+    );
+
+    return streamSSE(c, async (stream) => {
+      try {
+        for await (const frame of rt.labRunner.stream(id, scriptPath, {
+          repoRoot: rt.config.repoRoot,
+          // Experiments run from the repo root: their relative imports and
+          // repo-root `.env` discovery assume it, and `AGENT_CWD` (the agent's
+          // sandbox) may not exist yet.
+          cwd: rt.config.repoRoot,
+          timeoutMs: rt.config.labTimeoutMs,
+          signal: c.req.raw.signal,
+        })) {
+          await stream.writeSSE({ event: frame.type, data: JSON.stringify(frame) });
+        }
+      } catch (err) {
+        await stream.writeSSE({
+          event: "error",
+          data: JSON.stringify({
+            error: "failed",
+            message: err instanceof Error ? err.message : String(err),
+          }),
+        });
+      } finally {
+        release();
+      }
     });
   });
 

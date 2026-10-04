@@ -5,16 +5,25 @@ import { UsageTab } from "./UsageTab";
 import { TimelineTab } from "./TimelineTab";
 import { DiffTab, collectDiffs } from "./DiffTab";
 import { ForensicsTab } from "./ForensicsTab";
+import { LabsTab } from "./LabsTab";
 import { collectForensics } from "../forensics";
 import type { AgentEvent, Mechanisms } from "../types";
 
-type TabId = "context" | "request" | "usage" | "timeline" | "diff" | "forensics";
+type TabId =
+  | "context"
+  | "request"
+  | "usage"
+  | "timeline"
+  | "diff"
+  | "forensics"
+  | "labs";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "context", label: "Context" },
   { id: "request", label: "Request" },
   { id: "usage", label: "Usage" },
   { id: "timeline", label: "Timeline" },
+  { id: "labs", label: "Labs" },
 ];
 
 interface ObservatoryProps {
@@ -79,6 +88,7 @@ export function Observatory({ events, mechanisms }: ObservatoryProps) {
         {tab === "timeline" && <TimelineTab events={events} />}
         {tab === "diff" && <DiffTab events={events} />}
         {tab === "forensics" && <ForensicsTab events={events} />}
+        {tab === "labs" && <LabsTab />}
       </div>
     </section>
   );

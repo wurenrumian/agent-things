@@ -1,5 +1,7 @@
 import type {
   AgentEvent,
+  LabFrame,
+  LabsResponse,
   Mechanisms,
   SessionDetail,
   SessionMeta,
@@ -223,4 +225,94 @@ function parseFrame(frame: string): AgentEvent | null {
 
 function isAbort(err: unknown): boolean {
   return err instanceof DOMException && err.name === "AbortError";
+}
+
+/* -------------------------------------------------------------------- labs */
+
+/** L3: the experiments catalog (`GET /api/labs`). */
+export function getLabs(): Promise<LabsResponse> {
+  return request<LabsResponse>("/api/labs");
+}
+
+export interface LabRunHandlers {
+  onFrame: (frame: LabFrame) => void;
+  onError?: (error: Error) => void;
+  onDone?: () => void;
+}
+
+/**
+ * L3: run one lab and consume its SSE output (`EventSource` cannot POST, so we
+ * use a `fetch` reader like `sendMessage`). Each frame is
+ * `event: <type>\ndata: <JSON of the LabFrame>`; the stream ends after `exit`.
+ * Aborting the signal kills the server-side process tree.
+ */
+export async function runLab(
+  id: string,
+  signal: AbortSignal,
+  handlers: LabRunHandlers,
+): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/labs/${encodeURIComponent(id)}/run`, {
+      method: "POST",
+      headers: { accept: "text/event-stream" },
+      signal,
+    });
+  } catch (err) {
+    if (isAbort(err)) return;
+    throw err;
+  }
+
+  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.body) throw new Error("response has no body");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let boundary = nextBoundary(buffer);
+      while (boundary !== -1) {
+        const frame = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary).replace(/^\r?\n\r?\n/, "");
+        const parsed = parseLabFrame(frame);
+        if (parsed) {
+          handlers.onFrame(parsed);
+          if (parsed.type === "exit") {
+            handlers.onDone?.();
+            return;
+          }
+        }
+        boundary = nextBoundary(buffer);
+      }
+    }
+    handlers.onDone?.();
+  } catch (err) {
+    if (isAbort(err)) return;
+    const error = err instanceof Error ? err : new Error(String(err));
+    handlers.onError?.(error);
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+/** Parse one lab SSE frame; null for comments/keepalives or bad JSON. */
+function parseLabFrame(frame: string): LabFrame | null {
+  const data: string[] = [];
+  for (const rawLine of frame.split(/\r?\n/)) {
+    if (!rawLine.startsWith("data:")) continue;
+    data.push(rawLine.slice("data:".length).replace(/^ /, ""));
+  }
+  if (data.length === 0) return null;
+  try {
+    return JSON.parse(data.join("\n")) as LabFrame;
+  } catch {
+    return null;
+  }
 }
