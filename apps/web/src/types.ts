@@ -242,3 +242,40 @@ export interface SessionDetail {
   session: SessionMeta;
   messages: ChatMessage[];
 }
+
+/* -------------------------------------------------------------------- labs */
+
+/** L3: a lab either calls no API (`offline`) or hits OpenRouter (`api`). */
+export type LabKind = "offline" | "api";
+
+/** L3: one entry of `GET /api/labs` (mirror of the server registry). */
+export interface Lab {
+  id: string;
+  title: string;
+  mechanism: string;
+  kind: LabKind;
+  apiCalls?: number;
+  estSeconds?: number;
+  script: string;
+  docsRun: string;
+  blurb: string;
+}
+
+/** L3: `GET /api/labs`. */
+export interface LabsResponse {
+  enabled: boolean;
+  labs: Lab[];
+}
+
+/** L3: one frame of the run SSE stream from `POST /api/labs/:id/run`. */
+export type LabFrame =
+  | { type: "start"; id: string; command: string }
+  | { type: "stdout"; line: string }
+  | { type: "stderr"; line: string }
+  | {
+      type: "exit";
+      code: number | null;
+      durationMs: number;
+      timedOut?: boolean;
+      error?: string;
+    };

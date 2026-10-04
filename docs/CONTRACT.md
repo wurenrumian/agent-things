@@ -36,6 +36,8 @@ All responses JSON unless noted. Errors: `{ "error": string }` with status.
 | GET | `/api/sessions/:id/tasks` | — | `TaskRecord[]` |
 | POST | `/api/sessions/:id/messages` | `{ input: string }` | `text/event-stream` |
 | POST | `/api/sessions/:id/approvals` | `{ toolCallId, decision: "allow"\|"deny", reason? }` | `{ ok: true, toolCallId, decision }` (M12) |
+| GET | `/api/labs` | — | `{ enabled: boolean, labs: Lab[] }` (L3) |
+| POST | `/api/labs/:id/run` | — | `text/event-stream` of `LabFrame` (L3) |
 
 `SessionMeta = { id, title, cwd, createdAt, updatedAt, messageCount }`.
 
@@ -235,6 +237,37 @@ splicing the system prefix) before a normal model turn. **Unknown** slash input
 (`/foo`, `/etc/hosts`) is not a command and falls through as ordinary model
 input. Commands are not exposed as tools, so they add no schema tokens.
 
+**L3 Labs (additive).** `GET /api/labs` returns the experiment catalog; the
+server's `registry.ts` is the **allowlist**, and a run target is always resolved
+from it by id — the server never accepts a caller-supplied path.
+
+```jsonc
+{ "enabled": true, "labs": [
+  { "id": "forensics", "title": "Cache forensics classifier",
+    "mechanism": "forensics", "kind": "offline", "apiCalls": 5, "estSeconds": 30,
+    "script": "forensics-experiment.ts", "docsRun": "docs/runs/l1-cache-forensics.md",
+    "blurb": "…" } ] }
+```
+
+`kind` is `"offline"` (zero API calls) or `"api"` (talks to OpenRouter; `apiCalls`
+is the harness's stated budget). `POST /api/labs/:id/run` spawns the allowlisted
+script from the repo root, inheriting `process.env` (so the repo-root `.env`
+reaches API labs), and streams `text/event-stream` frames:
+
+```
+event: start   data: { type:"start", id, command }
+event: stdout  data: { type:"stdout", line }
+event: stderr  data: { type:"stderr", line }
+event: exit    data: { type:"exit", code, durationMs, timedOut?, error? }
+```
+
+`exit` is terminal. Guards: `404` for an unknown id, `403` when
+`LABS_ENABLED=false`, and `409 { error:"busy" }` when another lab is already
+running (at most one at a time). `LAB_TIMEOUT_MS` (default `300000`) kills the
+process **tree** and emits `exit` with `timedOut:true`; a client disconnect
+aborts the run and kills the tree; the child is never spawned on page load, only
+on an explicit run.
+
 ## Config (server, from env)
 
 Read from repo-root `.env` (do not add a dotenv dependency; write a tiny loader).
@@ -290,6 +323,13 @@ Read from repo-root `.env` (do not add a dotenv dependency; write a tiny loader)
 - `APPROVAL_TIMEOUT_MS` (positive integer, default `30000`). How long an `ask`
   approval may wait before the server resolves it `deny` (fail closed). Only
   meaningful when a gate (`POLICY_FILE`/`HOOKS_FILE`) can produce `ask`.
+- `LABS_ENABLED` (`true` | `false`, default `true`). When `true`, `GET /api/labs`
+  returns the experiment catalog and `POST /api/labs/:id/run` streams a run. When
+  `false`, the catalog reports `{ enabled:false, labs:[] }`, every run returns
+  `403`, and the rest of the server behaves exactly as before.
+- `LAB_TIMEOUT_MS` (positive integer, default `300000`). Wall-clock ceiling per
+  lab run; on expiry the process **tree** is killed and the run emits an `exit`
+  frame with `timedOut:true`.
 
 ## Web app (Vite + React + TS, dev port 5173)
 
@@ -317,5 +357,10 @@ Read from repo-root `.env` (do not add a dotenv dependency; write a tiny loader)
 - Session picker: list sessions, create a new one, load existing events on select.
   A **Fork** action (M8) branches the selected session; each assistant turn also
   exposes a per-message fork through that point.
+- **Labs tab (L3, additive):** lists the `GET /api/labs` catalog grouped by
+  `kind` (offline first), each with title, blurb, mechanism, `apiCalls`, a link
+  to its `docsRun`, and a **Run** button. An `api` lab runs only after an
+  explicit confirm that restates its call budget. A run renders a live
+  stdout/stderr console plus the exit status/duration. Nothing runs on load.
 
 No component library. Hand-written CSS is fine and preferred.

@@ -121,6 +121,14 @@ export interface ServerConfig {
    * a turn whose gate returns `ask` can never hang forever.
    */
   approvalTimeoutMs: number;
+  /**
+   * L3 / Labs: whether the experiments catalog and run routes are active
+   * (`LABS_ENABLED`, default `true`). When `false` both routes are inert and
+   * the rest of the server behaves exactly as before.
+   */
+  labsEnabled: boolean;
+  /** L3 / Labs: wall-clock ceiling per run before the process tree is killed. */
+  labTimeoutMs: number;
 }
 
 /** Summary placement, mirroring the compaction mechanism's union. */
@@ -342,6 +350,12 @@ export function loadConfig(): ServerConfig {
       process.env["APPROVAL_TIMEOUT_MS"],
       30_000,
       "APPROVAL_TIMEOUT_MS",
+    ),
+    labsEnabled: parseBool(process.env["LABS_ENABLED"], true, "LABS_ENABLED"),
+    labTimeoutMs: parsePositiveInt(
+      process.env["LAB_TIMEOUT_MS"],
+      300_000,
+      "LAB_TIMEOUT_MS",
     ),
   };
 }
